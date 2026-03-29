@@ -8,11 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install models package first (shared dependency)
-COPY ../models /models
+COPY models/ /models
 RUN pip install --no-cache-dir /models
 
-COPY pyproject.toml .
-COPY src/ src/
+COPY aggregator/pyproject.toml .
+COPY aggregator/src/ src/
 RUN pip install --no-cache-dir -e .
 
 RUN useradd -m -u 1000 appuser

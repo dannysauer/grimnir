@@ -8,15 +8,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install models package first (shared dependency)
-COPY ../models /models
+COPY models/ /models
 RUN pip install --no-cache-dir /models
 
-COPY pyproject.toml .
-COPY src/ src/
+COPY backend/pyproject.toml .
+COPY backend/src/ src/
 RUN pip install --no-cache-dir -e .
 
 # Copy frontend to be served as static files
-COPY ../frontend /app/frontend
+COPY frontend/ /app/frontend
 
 RUN useradd -m -u 1000 appuser
 USER appuser
