@@ -92,7 +92,7 @@ grimnir/
 - Python 3.12+
 - All new code uses `pyproject.toml` with `hatchling` build backend
 - Dependencies pinned to specific versions
-- `asyncio` throughout; asyncpg for all DB access (no SQLAlchemy/Alembic)
+- `asyncio` throughout; asyncpg driver at runtime, psycopg2-binary only for Alembic migrations
 - `structlog` for logging in all services
 - Type hints everywhere; `from __future__ import annotations` at top of each file
 
@@ -118,14 +118,17 @@ grimnir/
 - Retention: drop raw chunks after 90 days
 - Continuous aggregate `csi_variance_1min` refreshes every minute
 
-**Schema management:** Plain SQL, no ORM. Schema lives in `mimir/001_schema.sql`.
-Run once against a fresh database:
+**Schema management:** ORM models in `mimir/`, migrations via Alembic. Both services
+run `run_migrations(DATABASE_URL)` at startup (idempotent). `mimir/001_schema.sql`
+is a plain-SQL reference of the same schema, useful for bootstrapping or inspection.
+
+To bootstrap a fresh database manually:
 ```bash
 psql -U postgres -c "CREATE DATABASE csi;"
 psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme'; GRANT ALL ON DATABASE csi TO csi_user;"
 psql -U postgres -d csi -f mimir/001_schema.sql
 ```
-For schema changes, add a new `mimir/00N_*.sql` migration file and apply manually.
+Or just start a service with `DATABASE_URL` set — Alembic will apply migrations automatically.
 
 ## UDP Wire Protocol
 
@@ -176,7 +179,13 @@ conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 ## Docker Build Notes
 
 Build context for both Dockerfiles is the **repo root** (not the service subdirectory).
-Each service is self-contained — no shared Python package dependency.
+This is because both services depend on the `mimir/` package which sits at the root.
+
+```dockerfile
+# In geri/Dockerfile and freki/Dockerfile:
+COPY mimir/ /mimir
+RUN pip install --no-cache-dir /mimir
+```
 
 In `bifrost/compose.yaml` the build context is `..` (repo root). When building manually:
 ```bash
@@ -223,6 +232,10 @@ pointing at that IP.
 
 ## Known TODOs / Areas for Claude Code to Address
 
+- [ ] **Mimir package not yet implemented** — `geri` and `freki` both import
+      `from csi_models import ...` but `mimir/` only has `001_schema.sql` so far;
+      the SQLAlchemy models, engine factory, and Alembic migrations need to be written
+      before either service can run
 - [ ] `hlidskjalf` has no error state for failed SSE connections beyond the dot colour
 - [ ] No tests exist yet — pytest + pytest-asyncio for geri/freki,
       coverage of `geri/src/geri/parser.py` is highest priority

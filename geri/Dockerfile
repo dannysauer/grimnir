@@ -2,10 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# asyncpg needs a C compiler to build its extension
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install mimir (shared models/migrations package) first
+COPY mimir/ /mimir
+RUN pip install --no-cache-dir /mimir
 
 COPY geri/pyproject.toml .
 COPY geri/src/ src/

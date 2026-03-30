@@ -1,30 +1,26 @@
 """
-db.py — shared asyncpg pool for Freki.
+db.py — FastAPI dependency for SQLAlchemy async sessions.
 
 Usage in a router:
-    from ..db import get_pool
-    pool = get_pool()
-    rows = await pool.fetch("SELECT ...")
+    from ..db import SessionDep
+    async def my_endpoint(session: SessionDep): ...
 """
 
 from __future__ import annotations
 
-import asyncpg
+from collections.abc import AsyncGenerator
+from typing import Annotated
 
-_pool: asyncpg.Pool | None = None
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-
-async def init_pool(dsn: str) -> None:
-    global _pool
-    _pool = await asyncpg.create_pool(dsn, min_size=2, max_size=20)
-
-
-async def close_pool() -> None:
-    if _pool:
-        await _pool.close()
+from csi_models import get_session_factory
 
 
-def get_pool() -> asyncpg.Pool:
-    if _pool is None:
-        raise RuntimeError("DB pool not initialized — startup event not fired?")
-    return _pool
+async def _get_session() -> AsyncGenerator[AsyncSession, None]:
+    factory = get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+SessionDep = Annotated[AsyncSession, Depends(_get_session)]

@@ -2,11 +2,11 @@
 routers/history.py
 
 GET /api/history/variance?receiver_id=1&minutes=60
-    Per-minute amplitude variance from the csi_variance_1min continuous aggregate.
+    Per-minute RSSI variance from the continuous aggregate.
     Used by the 60-minute variance chart on the dashboard.
 
 GET /api/history/snapshot?receiver_id=1&limit=1
-    Raw amplitude/phase arrays for the N most recent samples.
+    Most recent raw CSI samples for a receiver.
     Used by the subcarrier amplitude heatmap.
 
 GET /api/history/receivers
@@ -17,41 +17,71 @@ GET /api/history/receivers
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
+from sqlalchemy import select, text
 
-from ..db import get_pool
+from csi_models import CsiSample, Receiver, ReceiverHeartbeat
+
+from ..db import SessionDep
 
 router = APIRouter()
 
 
 @router.get("/variance")
 async def get_variance(
-    receiver_id: int = Query(..., description="Receiver ID"),
-    minutes: int = Query(60, ge=1, le=1440, description="Look-back window in minutes"),
+    session: SessionDep,
+    receiver_id: int = Query(...),
+    minutes: int = Query(default=60, ge=1, le=1440),
 ):
-    """Per-minute variance from the continuous aggregate."""
-    pool = get_pool()
-    rows = await pool.fetch(
-        """
-        SELECT
-            bucket,
-            sample_count,
-            avg_rssi,
-            avg_amplitude_variance
-        FROM csi_variance_1min
-        WHERE receiver_id = $1
-          AND bucket > NOW() - ($2 || ' minutes')::INTERVAL
-        ORDER BY bucket ASC
-        """,
-        receiver_id,
-        str(minutes),
+    """
+    Query the csi_variance_1min continuous aggregate.
+    Falls back to raw csi_samples if the aggregate has no data yet
+    (e.g. immediately after first startup).
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT
+                bucket AS time,
+                avg_rssi,
+                stddev_rssi,
+                sample_count
+            FROM csi_variance_1min
+            WHERE receiver_id = :rx_id
+              AND bucket >= NOW() - (:minutes || ' minutes')::INTERVAL
+            ORDER BY bucket ASC
+            """
+        ),
+        {"rx_id": receiver_id, "minutes": minutes},
     )
+    rows = result.mappings().all()
+
+    # Fall back to raw data if aggregate is empty (< 2 minutes of data)
+    if len(rows) < 2:
+        result = await session.execute(
+            text(
+                """
+                SELECT
+                    time_bucket('1 minute', time) AS time,
+                    AVG(rssi)::float              AS avg_rssi,
+                    STDDEV(rssi)::float           AS stddev_rssi,
+                    COUNT(*)                      AS sample_count
+                FROM csi_samples
+                WHERE receiver_id = :rx_id
+                  AND time >= NOW() - (:minutes || ' minutes')::INTERVAL
+                GROUP BY 1
+                ORDER BY 1 ASC
+                """
+            ),
+            {"rx_id": receiver_id, "minutes": minutes},
+        )
+        rows = result.mappings().all()
+
     return [
         {
-            "time":               row["bucket"].isoformat(),
-            "sample_count":       row["sample_count"],
-            "avg_rssi":           round(float(row["avg_rssi"]), 2) if row["avg_rssi"] else None,
-            "amplitude_variance": round(float(row["avg_amplitude_variance"]), 4)
-                                  if row["avg_amplitude_variance"] else None,
+            "time": row["time"].isoformat(),
+            "avg_rssi": round(row["avg_rssi"], 1) if row["avg_rssi"] is not None else None,
+            "stddev_rssi": round(row["stddev_rssi"], 3) if row["stddev_rssi"] is not None else None,
+            "sample_count": row["sample_count"],
         }
         for row in rows
     ]
@@ -59,52 +89,54 @@ async def get_variance(
 
 @router.get("/snapshot")
 async def get_snapshot(
-    receiver_id: int = Query(..., description="Receiver ID"),
-    limit: int = Query(1, ge=1, le=100, description="Number of recent samples"),
+    session: SessionDep,
+    receiver_id: int = Query(...),
+    limit: int = Query(default=1, ge=1, le=50),
 ):
-    """Raw amplitude/phase arrays — used to render the subcarrier heatmap."""
-    pool = get_pool()
-    rows = await pool.fetch(
-        """
-        SELECT
-            time, rssi,
-            antenna_count, subcarrier_count,
-            amplitude, phase, label
-        FROM csi_samples
-        WHERE receiver_id = $1
-        ORDER BY time DESC
-        LIMIT $2
-        """,
-        receiver_id,
-        limit,
+    """Most recent CSI samples for a receiver — used for the amplitude heatmap."""
+    result = await session.execute(
+        select(CsiSample)
+        .where(CsiSample.receiver_id == receiver_id)
+        .order_by(CsiSample.time.desc())
+        .limit(limit)
     )
+    samples = result.scalars().all()
+
     return [
         {
-            "time":             row["time"].isoformat(),
-            "rssi":             row["rssi"],
-            "antenna_count":    row["antenna_count"],
-            "subcarrier_count": row["subcarrier_count"],
-            "amplitude":        list(row["amplitude"]),
-            "phase":            list(row["phase"]),
-            "label":            row["label"],
+            "time": s.time.isoformat(),
+            "rssi": s.rssi,
+            "antenna_count": s.antenna_count,
+            "subcarrier_count": s.subcarrier_count,
+            "amplitude": s.amplitude,
+            "phase": s.phase,
+            "label": s.label,
         }
-        for row in rows
+        for s in samples
     ]
 
 
 @router.get("/receivers")
-async def get_receivers():
+async def get_receivers(session: SessionDep):
     """All receivers with heartbeat — used by the dashboard on load."""
-    pool = get_pool()
-    rows = await pool.fetch(
-        """
-        SELECT
-            r.id, r.name, r.mac, r.role, r.floor, r.location, r.active,
-            h.last_seen,
-            h.ip_address::text AS ip_address
-        FROM receivers r
-        LEFT JOIN receiver_heartbeats h ON h.receiver_id = r.id
-        ORDER BY r.id
-        """
+    result = await session.execute(
+        select(Receiver, ReceiverHeartbeat)
+        .outerjoin(ReceiverHeartbeat, Receiver.id == ReceiverHeartbeat.receiver_id)
+        .order_by(Receiver.id)
     )
-    return [dict(row) for row in rows]
+    rows = result.all()
+
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "mac": str(r.mac),
+            "floor": r.floor,
+            "location": r.location,
+            "role": r.role,
+            "active": r.active,
+            "last_seen": h.last_seen.isoformat() if h else None,
+            "ip_address": str(h.ip_address) if h and h.ip_address else None,
+        }
+        for r, h in rows
+    ]
