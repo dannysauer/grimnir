@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install models package first (shared dependency)
-COPY models/ /models
-RUN pip install --no-cache-dir /models
+# Install mimir (shared models/migrations package) first
+COPY mimir/ /mimir
+RUN pip install --no-cache-dir /mimir
 
-COPY aggregator/pyproject.toml .
-COPY aggregator/src/ src/
+COPY geri/pyproject.toml .
+COPY geri/src/ src/
 RUN pip install --no-cache-dir -e .
 
 RUN useradd -m -u 1000 appuser
@@ -20,4 +20,4 @@ USER appuser
 
 EXPOSE 5005/udp
 
-CMD ["csi-aggregator"]
+CMD ["geri"]

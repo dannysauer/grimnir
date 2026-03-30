@@ -1,20 +1,20 @@
 services:
-  aggregator:
+  geri:
     build:
-      context: .
-      dockerfile: aggregator/Dockerfile
-    image: csi-aggregator
+      context: ..
+      dockerfile: geri/Dockerfile
+    image: grimnir/geri:latest
     environment:
       - DATABASE_URL=${DATABASE_URL}
     ports:
       - "${UDP_PORT:-5005}:5005/udp"
     restart: unless-stopped
 
-  backend:
+  freki:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
-    image: csi-backend
+      context: ..
+      dockerfile: freki/Dockerfile
+    image: grimnir/freki:latest
     environment:
       - DATABASE_URL=${DATABASE_URL}
     ports:

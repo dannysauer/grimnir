@@ -88,7 +88,7 @@ async def shutdown() -> None:
 
 def run() -> None:
     uvicorn.run(
-        "csi_backend.main:app",
+        "freki.main:app",
         host=HOST,
         port=PORT,
         log_level=LOG_LEVEL,
