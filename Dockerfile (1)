@@ -1,0 +1,114 @@
+"""
+db.py — asyncpg connection pool and CSI insert logic
+"""
+
+from __future__ import annotations
+
+import asyncpg
+import structlog
+from datetime import datetime, timezone
+
+from .parser import CSIPacket
+
+log = structlog.get_logger(__name__)
+
+
+async def create_pool(dsn: str) -> asyncpg.Pool:
+    pool = await asyncpg.create_pool(dsn, min_size=2, max_size=10)
+    log.info("db.pool_created", dsn=dsn.split("@")[-1])  # log host only, not credentials
+    return pool
+
+
+async def ensure_receiver(pool: asyncpg.Pool, name: str, mac: str) -> int:
+    """Return receiver ID, upserting a row if the name is new.
+
+    When a new receiver checks in we add it automatically so you don't
+    need to pre-seed the DB for every new board.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO receivers (name, mac, role, active)
+            VALUES ($1, $2, 'receiver', true)
+            ON CONFLICT (name) DO UPDATE
+                SET mac    = EXCLUDED.mac,
+                    active = true
+            RETURNING id
+            """,
+            name,
+            mac,
+        )
+        receiver_id: int = row["id"]
+
+        # Update heartbeat
+        await conn.execute(
+            """
+            INSERT INTO receiver_heartbeats (receiver_id, last_seen)
+            VALUES ($1, NOW())
+            ON CONFLICT (receiver_id) DO UPDATE
+                SET last_seen = NOW()
+            """,
+            receiver_id,
+        )
+
+    return receiver_id
+
+
+# Cache name → id to avoid a DB round-trip per packet
+_receiver_id_cache: dict[str, int] = {}
+
+
+async def get_receiver_id(pool: asyncpg.Pool, pkt: CSIPacket) -> int:
+    if pkt.receiver_name not in _receiver_id_cache:
+        rid = await ensure_receiver(pool, pkt.receiver_name, pkt.transmitter_mac)
+        _receiver_id_cache[pkt.receiver_name] = rid
+        log.info("db.receiver_registered", name=pkt.receiver_name, id=rid)
+    return _receiver_id_cache[pkt.receiver_name]
+
+
+async def insert_batch(
+    pool: asyncpg.Pool,
+    batch: list[tuple[datetime, int, CSIPacket]],
+) -> None:
+    """Bulk-insert a list of (wall_time, receiver_id, packet) tuples."""
+    if not batch:
+        return
+
+    records = [
+        (
+            wall_time,
+            receiver_id,
+            pkt.transmitter_mac,
+            pkt.rssi,
+            pkt.noise_floor,
+            pkt.channel,
+            pkt.bandwidth_mhz,
+            pkt.antenna_count,
+            pkt.subcarrier_count,
+            pkt.amplitude,
+            pkt.phase,
+        )
+        for wall_time, receiver_id, pkt in batch
+    ]
+
+    async with pool.acquire() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO csi_samples (
+                time, receiver_id, transmitter_mac,
+                rssi, noise_floor,
+                channel, bandwidth,
+                antenna_count, subcarrier_count,
+                amplitude, phase
+            ) VALUES (
+                $1, $2, $3,
+                $4, $5,
+                $6, $7,
+                $8, $9,
+                $10, $11
+            )
+            """,
+            records,
+        )
+
+    log.debug("db.batch_inserted", count=len(records))

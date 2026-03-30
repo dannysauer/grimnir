@@ -1,0 +1,68 @@
+# compose.yaml — CSI Localization Stack
+# Standalone deployment (non-k8s)
+#
+# Usage:
+#   cp .env.example .env   # then edit .env
+#   docker compose up -d
+#
+# Exposes:
+#   UDP 5005  — ESP32 CSI data ingress
+#   TCP 8000  — Web dashboard + API
+
+services:
+
+  aggregator:
+    build:
+      context: ./aggregator
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL:     ${DATABASE_URL}
+      UDP_HOST:         "0.0.0.0"
+      UDP_PORT:         "5005"
+      BATCH_SIZE:       "50"
+      BATCH_TIMEOUT_MS: "500"
+      LOG_LEVEL:        "info"
+    ports:
+      - "5005:5005/udp"
+    networks:
+      - csi-internal
+    healthcheck:
+      # No HTTP endpoint — check process is running
+      test: ["CMD-SHELL", "pgrep -f csi-aggregator || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      HOST:         "0.0.0.0"
+      PORT:         "8000"
+      LOG_LEVEL:    "info"
+    volumes:
+      # Serve frontend static files
+      - ./frontend:/app/frontend:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - csi-internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      aggregator:
+        condition: service_started
+
+networks:
+  csi-internal:
+    driver: bridge
+
+# Note: Postgres is NOT included here — it's on your dedicated NAS.
+# Set DATABASE_URL in .env to point at your existing Postgres instance.
