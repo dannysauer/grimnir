@@ -8,12 +8,7 @@ version = "0.1.0"
 description = "UDP CSI packet receiver → PostgreSQL/TimescaleDB writer"
 requires-python = ">=3.12"
 dependencies = [
-    "csi-models",
-    "sqlalchemy==2.0.36",
-    "alembic==1.14.0",
     "asyncpg==0.30.0",
-    "psycopg2-binary==2.9.10",
-    "greenlet==3.1.1",
     "structlog==24.4.0",
 ]
 

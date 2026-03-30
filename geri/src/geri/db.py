@@ -1,106 +1,114 @@
 """
-db.py — Database write operations for the aggregator.
-
-Uses SQLAlchemy async sessions. The session factory is initialised in
-main.py after migrations have run.
+db.py — asyncpg connection pool and CSI insert logic for Geri.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import asyncpg
 import structlog
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-from csi_models import CsiSample, Receiver, ReceiverHeartbeat, get_session_factory
 
 from .parser import CSIPacket
 
 log = structlog.get_logger(__name__)
 
 
-async def get_or_create_receiver_id(name: str, mac: str) -> int:
+async def create_pool(dsn: str) -> asyncpg.Pool:
+    pool = await asyncpg.create_pool(dsn, min_size=2, max_size=10)
+    log.info("db.pool_created", host=dsn.split("@")[-1])  # host only, not credentials
+    return pool
+
+
+async def ensure_receiver(pool: asyncpg.Pool, name: str, mac: str) -> int:
+    """Return receiver ID, upserting a row if the name is new.
+
+    New receivers self-register automatically — no manual DB seeding needed
+    when flashing a new board.
     """
-    Return the DB id for a receiver by name.
-    If not found, auto-register it — admin can fill in floor/location later.
-    """
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(Receiver.id).where(Receiver.name == name)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO receivers (name, mac, role, active)
+            VALUES ($1, $2, 'receiver', true)
+            ON CONFLICT (name) DO UPDATE
+                SET mac    = EXCLUDED.mac,
+                    active = true
+            RETURNING id
+            """,
+            name,
+            mac,
         )
-        row = result.scalar_one_or_none()
-        if row is not None:
-            return row
+        receiver_id: int = row["id"]
 
-        stmt = (
-            pg_insert(Receiver)
-            .values(mac=mac, name=name, role="receiver", active=True)
-            .on_conflict_do_update(
-                index_elements=["mac"],
-                set_={"name": name},
-            )
-            .returning(Receiver.id)
+        await conn.execute(
+            """
+            INSERT INTO receiver_heartbeats (receiver_id, last_seen)
+            VALUES ($1, NOW())
+            ON CONFLICT (receiver_id) DO UPDATE
+                SET last_seen = NOW()
+            """,
+            receiver_id,
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        new_id: int = result.scalar_one()
-        log.info("receiver.registered", name=name, mac=mac, id=new_id)
-        return new_id
+
+    return receiver_id
 
 
-async def insert_batch(batch: list[tuple[datetime, int, CSIPacket]]) -> None:
+# Cache name → id to avoid a DB round-trip per packet
+_receiver_id_cache: dict[str, int] = {}
+
+
+async def get_receiver_id(pool: asyncpg.Pool, pkt: CSIPacket) -> int:
+    if pkt.receiver_name not in _receiver_id_cache:
+        rid = await ensure_receiver(pool, pkt.receiver_name, pkt.transmitter_mac)
+        _receiver_id_cache[pkt.receiver_name] = rid
+        log.info("db.receiver_registered", name=pkt.receiver_name, id=rid)
+    return _receiver_id_cache[pkt.receiver_name]
+
+
+async def insert_batch(
+    pool: asyncpg.Pool,
+    batch: list[tuple[datetime, int, CSIPacket]],
+) -> None:
     """Bulk-insert a list of (wall_time, receiver_id, packet) tuples."""
     if not batch:
         return
 
-    rows = [
-        {
-            "time": wall_time,
-            "receiver_id": receiver_id,
-            "transmitter_mac": pkt.transmitter_mac,
-            "rssi": pkt.rssi,
-            "noise_floor": pkt.noise_floor,
-            "channel": pkt.channel,
-            "bandwidth": pkt.bandwidth_mhz,
-            "antenna_count": pkt.antenna_count,
-            "subcarrier_count": pkt.subcarrier_count,
-            "amplitude": pkt.amplitude,
-            "phase": pkt.phase,
-        }
+    records = [
+        (
+            wall_time,
+            receiver_id,
+            pkt.transmitter_mac,
+            pkt.rssi,
+            pkt.noise_floor,
+            pkt.channel,
+            pkt.bandwidth_mhz,
+            pkt.antenna_count,
+            pkt.subcarrier_count,
+            pkt.amplitude,
+            pkt.phase,
+        )
         for wall_time, receiver_id, pkt in batch
     ]
 
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        await session.execute(pg_insert(CsiSample), rows)
-        await session.commit()
-
-    log.debug("db.batch_inserted", count=len(rows))
-
-
-async def upsert_heartbeat(
-    receiver_id: int,
-    ip_address: str | None = None,
-) -> None:
-    """Update last_seen for a receiver. Called periodically by the batch writer."""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        stmt = (
-            pg_insert(ReceiverHeartbeat)
-            .values(
-                receiver_id=receiver_id,
-                last_seen=datetime.now(tz=timezone.utc),
-                ip_address=ip_address,
+    async with pool.acquire() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO csi_samples (
+                time, receiver_id, transmitter_mac,
+                rssi, noise_floor,
+                channel, bandwidth,
+                antenna_count, subcarrier_count,
+                amplitude, phase
+            ) VALUES (
+                $1, $2, $3,
+                $4, $5,
+                $6, $7,
+                $8, $9,
+                $10, $11
             )
-            .on_conflict_do_update(
-                index_elements=["receiver_id"],
-                set_={
-                    "last_seen": datetime.now(tz=timezone.utc),
-                    "ip_address": ip_address,
-                },
-            )
+            """,
+            records,
         )
-        await session.execute(stmt)
-        await session.commit()
+
+    log.debug("db.batch_inserted", count=len(records))

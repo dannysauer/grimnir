@@ -1,98 +1,96 @@
 """
-routers/stream.py
+routers/stream.py — Server-Sent Events endpoint
 
-GET /api/stream  — Server-Sent Events
+GET /api/stream
 
-Pushes a JSON snapshot every second containing:
-  - all active receivers with last RSSI, variance, and liveness
-  - server timestamp
-
-The frontend uses this to update receiver cards and the variance chart in
-real time without polling.
+Streams a per-receiver CSI summary to the browser every second:
+{
+  "receivers": [
+    {
+      "id": 1, "name": "rx_ground",
+      "avg_rssi": -65, "amplitude_variance": 12.4,
+      "sample_count": 10, "last_seen": "2024-01-15T10:30:00Z",
+      "floor": 0, "location": "Living room"
+    }, ...
+  ],
+  "window_s": 5,
+  "timestamp": "2024-01-15T10:30:01Z"
+}
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, text
 
-from csi_models import Receiver, ReceiverHeartbeat, get_session_factory
+from ..db import get_pool
 
 router = APIRouter()
 
-POLL_INTERVAL_S = 1.0
-WINDOW_S = 30  # look back this many seconds for recent RSSI stats
+POLL_INTERVAL_S = 1.0   # how often to push to browser
+WINDOW_S        = 5     # aggregate over last N seconds
 
 
-async def _fetch_snapshot() -> dict:
-    factory = get_session_factory()
-    since = datetime.now(tz=timezone.utc) - timedelta(seconds=WINDOW_S)
+async def _fetch_summary(pool) -> dict:
+    """Pull the last WINDOW_S seconds of data, summarized per receiver."""
+    rows = await pool.fetch(
+        """
+        SELECT
+            r.id,
+            r.name,
+            r.floor,
+            r.location,
+            COUNT(s.time)                    AS sample_count,
+            AVG(s.rssi)                      AS avg_rssi,
+            MAX(s.time)                      AS last_seen,
+            AVG(
+                (SELECT VARIANCE(v) FROM UNNEST(s.amplitude) AS v)
+            )                                AS amplitude_variance
+        FROM receivers r
+        LEFT JOIN csi_samples s
+            ON s.receiver_id = r.id
+            AND s.time > NOW() - ($1 || ' seconds')::INTERVAL
+        WHERE r.role = 'receiver'
+          AND r.active = true
+        GROUP BY r.id, r.name, r.floor, r.location
+        ORDER BY r.id
+        """,
+        str(WINDOW_S),
+    )
 
-    async with factory() as session:
-        # All active receivers with their heartbeat
-        result = await session.execute(
-            select(Receiver, ReceiverHeartbeat)
-            .outerjoin(ReceiverHeartbeat, Receiver.id == ReceiverHeartbeat.receiver_id)
-            .where(Receiver.active == True)
-            .order_by(Receiver.id)
-        )
-        rows = result.all()
-
-        # Recent RSSI stats per receiver from csi_samples
-        # Using raw SQL for the aggregation — cleaner than ORM for window queries
-        stats_result = await session.execute(
-            text(
-                """
-                SELECT
-                    receiver_id,
-                    AVG(rssi)::float          AS avg_rssi,
-                    STDDEV(rssi)::float       AS stddev_rssi,
-                    COUNT(*)                  AS sample_count
-                FROM csi_samples
-                WHERE time >= :since
-                GROUP BY receiver_id
-                """
-            ),
-            {"since": since},
-        )
-        stats = {row.receiver_id: row for row in stats_result}
-
-    receivers = []
-    for receiver, heartbeat in rows:
-        s = stats.get(receiver.id)
-        receivers.append(
-            {
-                "id": receiver.id,
-                "name": receiver.name,
-                "floor": receiver.floor,
-                "location": receiver.location,
-                "role": receiver.role,
-                "last_seen": heartbeat.last_seen.isoformat() if heartbeat else None,
-                "ip_address": str(heartbeat.ip_address) if heartbeat and heartbeat.ip_address else None,
-                "avg_rssi": round(s.avg_rssi, 1) if s and s.avg_rssi is not None else None,
-                "stddev_rssi": round(s.stddev_rssi, 3) if s and s.stddev_rssi is not None else None,
-                "sample_count": s.sample_count if s else 0,
-            }
-        )
+    receivers = [
+        {
+            "id":                 row["id"],
+            "name":               row["name"],
+            "floor":              row["floor"],
+            "location":           row["location"],
+            "sample_count":       row["sample_count"],
+            "avg_rssi":           round(float(row["avg_rssi"]), 1) if row["avg_rssi"] else None,
+            "amplitude_variance": round(float(row["amplitude_variance"]), 4)
+                                  if row["amplitude_variance"] else None,
+            "last_seen":          row["last_seen"].isoformat() if row["last_seen"] else None,
+        }
+        for row in rows
+    ]
 
     return {
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        "window_s": WINDOW_S,
-        "receivers": receivers,
+        "receivers":  receivers,
+        "window_s":   WINDOW_S,
+        "timestamp":  datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
 async def _event_generator():
+    pool = get_pool()
     try:
         while True:
             try:
-                payload = await _fetch_snapshot()
-                yield f"data: {json.dumps(payload)}\n\n"
+                payload = await _fetch_summary(pool)
+                yield f"data: {json.dumps(payload, default=str)}\n\n"
             except Exception as exc:
                 yield f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n"
             await asyncio.sleep(POLL_INTERVAL_S)
@@ -106,7 +104,7 @@ async def stream():
         _event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",  # disable nginx buffering
         },
     )
