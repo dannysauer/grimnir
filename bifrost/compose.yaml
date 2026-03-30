@@ -1,22 +1,65 @@
+# bifrost/compose.yaml — Grimnir standalone deployment
+#
+# Usage:
+#   cp .env.example .env   # then edit DATABASE_URL
+#   docker compose -f bifrost/compose.yaml up -d
+#
+# Exposes:
+#   UDP 5005  — ESP32 CSI data ingress (Geri)
+#   TCP 8000  — Web dashboard + API (Freki + Hlidskjalf)
+#
+# Note: PostgreSQL is NOT included — it's on humpy (external NAS).
+#       Set DATABASE_URL in .env to point at your existing instance.
+
 services:
+
   geri:
     build:
       context: ..
       dockerfile: geri/Dockerfile
     image: grimnir/geri:latest
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-    ports:
-      - "${UDP_PORT:-5005}:5005/udp"
     restart: unless-stopped
+    environment:
+      DATABASE_URL:     ${DATABASE_URL}
+      UDP_HOST:         "0.0.0.0"
+      UDP_PORT:         "5005"
+      BATCH_SIZE:       "50"
+      BATCH_TIMEOUT_MS: "500"
+      LOG_LEVEL:        "info"
+    ports:
+      - "5005:5005/udp"
+    networks:
+      - grimnir-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f geri || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   freki:
     build:
       context: ..
       dockerfile: freki/Dockerfile
     image: grimnir/freki:latest
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
     restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      HOST:         "0.0.0.0"
+      PORT:         "8000"
+      LOG_LEVEL:    "info"
+    ports:
+      - "8000:8000"
+    networks:
+      - grimnir-internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      geri:
+        condition: service_started
+
+networks:
+  grimnir-internal:
+    driver: bridge
