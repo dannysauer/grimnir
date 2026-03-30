@@ -7,20 +7,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install models package first (shared dependency)
-COPY ../models /models
-RUN pip install --no-cache-dir /models
+# Install mimir (shared models/migrations package) first
+COPY mimir/ /mimir
+RUN pip install --no-cache-dir /mimir
 
-COPY pyproject.toml .
-COPY src/ src/
+COPY freki/pyproject.toml .
+COPY freki/src/ src/
 RUN pip install --no-cache-dir -e .
 
 # Copy frontend to be served as static files
-COPY ../frontend /app/frontend
+COPY hlidskjalf/ /app/frontend
 
 RUN useradd -m -u 1000 appuser
 USER appuser
 
 EXPOSE 8000
 
-CMD ["csi-backend"]
+CMD ["freki"]

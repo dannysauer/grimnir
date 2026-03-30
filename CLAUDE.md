@@ -14,14 +14,17 @@ training data.
 
 ## Norse Naming Convention
 
-Components follow a raven/Odin theme:
-- **Huginn** — the transmitter ESP32-S3 ("Thought" — sends out into the world)
-- **Muninn** — receiver ESP32-S3 devices ("Memory" — capture and record)
-- The project name Grimnir reflects Odin as the hidden observer
+See `GRIMNIR.md` for the full naming reference. Summary:
 
-Apply this naming where it makes sense (e.g. docker image names, service names,
-log tags), but don't force it onto technical identifiers where clarity matters
-more (Python package names, DB table names, env vars stay as-is).
+| Component | Norse Name | Role |
+|-----------|-----------|------|
+| Transmitter firmware | **Huginn** | ESP32-S3 that broadcasts beacon frames |
+| Receiver firmware | **Muninn** | ESP32-S3(s) that capture CSI + stream UDP |
+| Aggregator service | **Geri** (`geri/`) | UDP → TimescaleDB writer |
+| Backend API | **Freki** (`freki/`) | FastAPI REST + SSE |
+| Frontend | **Hlidskjalf** (`hlidskjalf/`) | Web dashboard |
+| Database/models | **Mimir** (`mimir/`) | SQLAlchemy + Alembic (not yet implemented) |
+| Deployment | **Bifrost** (`bifrost/`) | Compose, Helm, Ansible |
 
 ## Hardware
 
@@ -36,7 +39,10 @@ more (Python package names, DB table names, env vars stay as-is).
 
 ```
 grimnir/
-├── models/                         # Shared Python package: SQLAlchemy + Alembic
+├── CLAUDE.md
+├── GRIMNIR.md                      # Naming reference (see this for full Norse map)
+├── .env.example                    # Environment variable template
+├── mimir/                          # Shared Python package: SQLAlchemy + Alembic (TODO)
 │   ├── pyproject.toml
 │   └── src/csi_models/
 │       ├── __init__.py
@@ -44,38 +50,37 @@ grimnir/
 │       ├── engine.py               # Async SQLAlchemy engine factory
 │       ├── migrate.py              # Alembic runner (called at container startup)
 │       └── migrations/
-│           ├── env.py              # Alembic environment (sync psycopg2 for migrations)
-│           ├── script.py.mako      # Migration file template
+│           ├── env.py
+│           ├── script.py.mako
 │           └── versions/
-│               └── 0001_initial_schema.py   # Initial schema + TimescaleDB setup
-├── aggregator/                     # UDP → TimescaleDB writer
+│               └── 0001_initial_schema.py
+├── geri/                           # UDP → TimescaleDB writer
 │   ├── pyproject.toml
 │   ├── Dockerfile
-│   └── src/csi_aggregator/
+│   └── src/geri/
 │       ├── main.py                 # UDP listener + batch writer + startup sequence
 │       ├── parser.py               # Binary CSI packet parser (mirrors firmware format)
 │       └── db.py                   # SQLAlchemy insert helpers
-├── backend/                        # FastAPI REST + SSE
+├── freki/                          # FastAPI REST + SSE
 │   ├── pyproject.toml
 │   ├── Dockerfile
-│   └── src/csi_backend/
+│   └── src/freki/
 │       ├── main.py                 # FastAPI app + startup sequence
 │       ├── db.py                   # SessionDep FastAPI dependency
 │       └── routers/
 │           ├── stream.py           # GET /api/stream  (SSE, 1s updates)
 │           ├── history.py          # GET /api/history/variance|snapshot|receivers
 │           └── labels.py           # CRUD /api/labels
-├── frontend/
+├── hlidskjalf/
 │   └── index.html                  # Single-file mobile-first dashboard (vanilla JS)
 ├── firmware/
 │   ├── config.h                    # ← EDIT BEFORE FLASHING each board
-│   ├── transmitter/main/main.c     # ESP-IDF v5.1+ C firmware
-│   └── receiver/main/main.c        # ESP-IDF v5.1+ C firmware
-├── helm/csi/                       # Helm chart for Kubernetes deployment
-├── ansible/deploy.yaml             # Build images + helm install
-├── compose.yaml                    # Docker Compose for standalone deployment
-├── .env.example                    # Environment variable template
-└── README.md
+│   ├── huginn/main/main.c          # Transmitter ESP-IDF v5.1+ C firmware
+│   └── muninn/main/main.c          # Receiver ESP-IDF v5.1+ C firmware
+└── bifrost/                        # Deployment: Compose + Helm + Ansible
+    ├── compose.yaml
+    ├── helm/
+    └── ansible/deploy.yaml
 ```
 
 ## Technology Stack
@@ -123,9 +128,9 @@ grimnir/
 - Retention: drop raw chunks after 90 days
 - Continuous aggregate `csi_variance_1min` refreshes every minute
 
-**Schema changes:** Always edit `models/src/csi_models/models.py` first, then:
+**Schema changes:** Always edit `mimir/src/csi_models/models.py` first, then:
 ```bash
-cd models && pip install -e .
+cd mimir && pip install -e .
 DATABASE_URL=postgresql://csi_user:changeme@humpy:5432/csi \
   alembic -c src/csi_models/migrations/env.py revision --autogenerate -m "description"
 ```
@@ -134,8 +139,8 @@ add them manually in the migration via `op.execute()`.
 
 ## UDP Wire Protocol
 
-The binary packet format is defined in `firmware/receiver/main/main.c` and parsed
-in `aggregator/src/csi_aggregator/parser.py`. They must stay in sync.
+The binary packet format is defined in `firmware/muninn/main/main.c` and parsed
+in `geri/src/geri/parser.py`. They must stay in sync.
 
 ```
 Offset  Size  Type        Field
@@ -181,18 +186,18 @@ conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 ## Docker Build Notes
 
 Build context for both Dockerfiles is the **repo root** (not the service subdirectory).
-This is because both services depend on the `models/` package which sits at the root.
+This is because both services depend on the `mimir/` package which sits at the root.
 
 ```dockerfile
-# In aggregator/Dockerfile and backend/Dockerfile:
-COPY models/ /models
-RUN pip install --no-cache-dir /models
+# In geri/Dockerfile and freki/Dockerfile:
+COPY mimir/ /mimir
+RUN pip install --no-cache-dir /mimir
 ```
 
-In `compose.yaml` the build context is `.` (repo root). When building manually:
+In `bifrost/compose.yaml` the build context is `..` (repo root). When building manually:
 ```bash
-docker build -f aggregator/Dockerfile -t csi-aggregator .
-docker build -f backend/Dockerfile -t csi-backend .
+docker build -f geri/Dockerfile -t grimnir/geri .
+docker build -f freki/Dockerfile -t grimnir/freki .
 ```
 
 ## Deployment
@@ -205,20 +210,21 @@ Postgres container. Set `DATABASE_URL` in `.env` to point at humpy.
 ```bash
 cp .env.example .env
 # edit .env
-docker compose up -d
+docker compose -f bifrost/compose.yaml up -d
 ```
 
 ### Kubernetes
 
 ```bash
-ansible-playbook ansible/deploy.yaml \
+ansible-playbook bifrost/ansible/deploy.yaml \
   -e db_url="postgresql+asyncpg://csi_user:changeme@humpy.home.arpa:5432/csi" \
   -e registry="your-registry.example.com" \
   -e aggregator_lb_ip="192.168.1.50"
 ```
 
-The aggregator Service should be type LoadBalancer so ESP32s can reach it by
-stable LAN IP. Set a DNS A record `csi-aggregator.home.arpa` pointing at that IP.
+The geri Service should be type LoadBalancer so ESP32s can reach it by
+stable LAN IP. Set a DNS A record `geri.home.arpa` (or `csi-aggregator.home.arpa`)
+pointing at that IP.
 
 ## Firmware
 
@@ -233,24 +239,23 @@ stable LAN IP. Set a DNS A record `csi-aggregator.home.arpa` pointing at that IP
 
 ## Known TODOs / Areas for Claude Code to Address
 
+- [ ] **Mimir package not yet implemented** — `geri` and `freki` both import
+      `from csi_models import ...` but `mimir/` doesn't exist yet; this is the
+      next major task before either service can run
 - [ ] The `csi_models` package needs an `alembic.ini` file for CLI use (env.py
       currently sets `script_location` programmatically, which works at runtime
       but `alembic` CLI commands need the ini)
-- [ ] Backend `labels.py` uses `text(f"NOW() - INTERVAL '{minutes} minutes'")` —
+- [ ] `freki` `routers/labels.py` uses `text(f"NOW() - INTERVAL '{minutes} minutes'")` —
       should be parameterised to avoid injection risk
-- [ ] Aggregator `db.py` `get_or_create_receiver_id` has a minor TOCTOU race
+- [ ] `geri` `db.py` `get_or_create_receiver_id` has a minor TOCTOU race
       if two packets from a new receiver arrive simultaneously — the upsert
       handles it but the select-first path could be removed
 - [ ] The `csi_variance_1min` continuous aggregate has no `downgrade` cleanup for
       its refresh policy — add `remove_continuous_aggregate_policy` to the
       migration downgrade path
-- [ ] Frontend has no error state for failed SSE connections beyond the dot colour
-- [ ] No tests exist yet — pytest + pytest-asyncio for aggregator/backend,
-      coverage of parser.py is highest priority
-- [ ] `compose.yaml` DATABASE_URL references `db:5432` (the compose internal db
-      hostname) in comments but the `.env.example` correctly points at humpy —
-      verify this is consistent and the compose file doesn't spin up a redundant db
-      service given humpy's DB is the target
+- [ ] `hlidskjalf` has no error state for failed SSE connections beyond the dot colour
+- [ ] No tests exist yet — pytest + pytest-asyncio for geri/freki,
+      coverage of `geri/src/geri/parser.py` is highest priority
 - [ ] Helm values `aggregatorLoadBalancerIP` is passed as empty string when not
       set — Helm template should use `if` guard to omit the field entirely rather
       than setting it to `""`

@@ -1,0 +1,22 @@
+services:
+  geri:
+    build:
+      context: ..
+      dockerfile: geri/Dockerfile
+    image: grimnir/geri:latest
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    ports:
+      - "${UDP_PORT:-5005}:5005/udp"
+    restart: unless-stopped
+
+  freki:
+    build:
+      context: ..
+      dockerfile: freki/Dockerfile
+    image: grimnir/freki:latest
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    restart: unless-stopped
