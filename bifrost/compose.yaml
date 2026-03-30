@@ -8,8 +8,8 @@
 #   UDP 5005  — ESP32 CSI data ingress (Geri)
 #   TCP 8000  — Web dashboard + API (Freki + Hlidskjalf)
 #
-# Note: PostgreSQL is NOT included — it's on humpy (external NAS).
-#       Set DATABASE_URL in .env to point at your existing instance.
+# Note: PostgreSQL is NOT included — provide DATABASE_URL in .env pointing at
+#       your existing TimescaleDB instance.
 
 services:
 

@@ -6,11 +6,17 @@
 #   pip install ansible kubernetes
 #   ansible-galaxy collection install kubernetes.core community.docker
 #
-# Usage:
+# Usage (minimal):
 #   ansible-playbook bifrost/ansible/deploy.yaml \
-#     -e db_url="postgresql+asyncpg://csi_user:changeme@humpy.home.arpa:5432/csi" \
-#     -e registry="your-registry.example.com" \
-#     -e aggregator_lb_ip="192.168.1.50"
+#     -e db_url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi"
+#
+# Usage (with MetalLB + external-dns, typical home-lab setup):
+#   ansible-playbook bifrost/ansible/deploy.yaml \
+#     -e db_url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi" \
+#     -e metallb_pool=default \
+#     -e metallb_lb_ip=192.168.1.50 \
+#     -e freki_hostname=grimnir.home.example.com \
+#     -e freki_ingress_class=nginx
 
 - name: Deploy Grimnir Stack
   hosts: localhost
@@ -20,11 +26,20 @@
   vars:
     release_name: grimnir
     namespace: grimnir
-    chart_path: "{{ playbook_dir }}/../helm/csi"
-    registry: "your-registry.example.com"
+    chart_ref: "{{ playbook_dir }}/../helm/grimnir"
     image_tag: "latest"
-    aggregator_lb_ip: ""
     db_url: ""  # required — pass via -e
+
+    # MetalLB — leave blank if not using MetalLB
+    metallb_pool: ""       # e.g. "default" or "lan-pool"
+    metallb_lb_ip: ""      # e.g. "192.168.1.50" (must be in the pool range)
+
+    # external-dns + ingress — leave blank to skip Ingress creation
+    freki_hostname: ""          # e.g. "grimnir.home.example.com"
+    freki_ingress_class: nginx  # ingress controller class name
+
+    # cert-manager — leave blank to skip TLS
+    freki_cluster_issuer: ""    # e.g. "letsencrypt-prod"
 
   tasks:
 
@@ -42,46 +57,83 @@
           metadata:
             name: "{{ namespace }}"
 
-    - name: Build geri (aggregator) image
+    - name: Build and push geri image
       community.docker.docker_image:
         build:
           path: "{{ playbook_dir }}/../.."
           dockerfile: geri/Dockerfile
-        name: "{{ registry }}/grimnir/geri"
+        name: "ghcr.io/dannysauer/grimnir/geri"
         tag: "{{ image_tag }}"
         source: build
         push: true
 
-    - name: Build freki (backend) image
+    - name: Build and push freki image
       community.docker.docker_image:
         build:
           path: "{{ playbook_dir }}/../.."
           dockerfile: freki/Dockerfile
-        name: "{{ registry }}/grimnir/freki"
+        name: "ghcr.io/dannysauer/grimnir/freki"
         tag: "{{ image_tag }}"
         source: build
         push: true
 
-    - name: Deploy Helm chart
-      kubernetes.core.helm:
-        name: "{{ release_name }}"
-        chart_ref: "{{ chart_path }}"
-        release_namespace: "{{ namespace }}"
-        create_namespace: true
-        wait: true
-        values:
+    - name: Build Helm values
+      ansible.builtin.set_fact:
+        helm_values:
           image:
             geri:
-              repository: "{{ registry }}/grimnir/geri"
+              repository: ghcr.io/dannysauer/grimnir/geri
               tag: "{{ image_tag }}"
             freki:
-              repository: "{{ registry }}/grimnir/freki"
+              repository: ghcr.io/dannysauer/grimnir/freki
               tag: "{{ image_tag }}"
           database:
             url: "{{ db_url }}"
-          service:
-            aggregatorType: "{{ 'LoadBalancer' if aggregator_lb_ip else 'NodePort' }}"
-            aggregatorLoadBalancerIP: "{{ aggregator_lb_ip }}"
+          geri:
+            service:
+              type: LoadBalancer
+              loadBalancerIP: "{{ metallb_lb_ip }}"
+              annotations: >-
+                {{
+                  ({} if not metallb_pool else
+                   {'metallb.universe.tf/address-pool': metallb_pool})
+                  | combine(
+                    {} if not metallb_lb_ip else
+                    {'metallb.universe.tf/loadBalancerIPs': metallb_lb_ip}
+                  )
+                }}
+          freki:
+            ingress:
+              enabled: "{{ freki_hostname != '' }}"
+              className: "{{ freki_ingress_class }}"
+              annotations: >-
+                {{
+                  ({} if not freki_hostname else
+                   {'external-dns.alpha.kubernetes.io/hostname': freki_hostname})
+                  | combine(
+                    {} if not freki_cluster_issuer else
+                    {'cert-manager.io/cluster-issuer': freki_cluster_issuer}
+                  )
+                }}
+              hosts: >-
+                {{
+                  [] if not freki_hostname else
+                  [{'host': freki_hostname, 'paths': [{'path': '/', 'pathType': 'Prefix'}]}]
+                }}
+              tls: >-
+                {{
+                  [] if not (freki_hostname and freki_cluster_issuer) else
+                  [{'secretName': release_name + '-tls', 'hosts': [freki_hostname]}]
+                }}
+
+    - name: Deploy Helm chart
+      kubernetes.core.helm:
+        name: "{{ release_name }}"
+        chart_ref: "{{ chart_ref }}"
+        release_namespace: "{{ namespace }}"
+        create_namespace: true
+        wait: true
+        values: "{{ helm_values }}"
 
     - name: Wait for geri rollout
       kubernetes.core.k8s_info:
@@ -107,7 +159,7 @@
           status: "True"
         wait_timeout: 120
 
-    - name: Show geri service
+    - name: Get geri service info
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Service
@@ -119,5 +171,5 @@
       ansible.builtin.debug:
         msg: >
           Geri UDP endpoint:
-          {{ agg_svc.resources[0].status.loadBalancer.ingress[0].ip | default('pending') }}:{{ agg_svc.resources[0].spec.ports[0].port }}
-          — set AGGREGATOR_HOST in firmware/config.h to point here
+          {{ agg_svc.resources[0].status.loadBalancer.ingress[0].ip | default('pending') }}:5005
+          — set AGGREGATOR_HOST in firmware/config.h (or DNS A record) to point here

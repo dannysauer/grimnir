@@ -1,0 +1,26 @@
+apiVersion: v2
+name: grimnir
+description: Wi-Fi CSI human presence detection and room-level localization
+type: application
+
+# Chart version — bumped by the chart-release workflow on every chart change.
+# Follows semver; managed automatically via chart-v* git tags.
+version: 0.1.0
+
+# Application version — updated by the release workflow to match the container tag.
+appVersion: "0.1.0"
+
+keywords:
+  - wifi
+  - csi
+  - presence-detection
+  - iot
+  - esp32
+
+home: https://github.com/dannysauer/grimnir
+sources:
+  - https://github.com/dannysauer/grimnir
+
+maintainers:
+  - name: dannysauer
+    url: https://github.com/dannysauer

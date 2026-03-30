@@ -1,0 +1,36 @@
+{{- if .Values.freki.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-freki" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: freki
+  {{- with .Values.freki.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.freki.ingress.className }}
+  ingressClassName: {{ .Values.freki.ingress.className }}
+  {{- end }}
+  {{- with .Values.freki.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.freki.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ printf "%s-freki" (include "grimnir.fullname" $) }}
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}

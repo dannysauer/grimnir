@@ -1,0 +1,109 @@
+# Default values for grimnir.
+# Override these with --set or a custom values file.
+
+# -- Container images
+image:
+  geri:
+    repository: ghcr.io/dannysauer/grimnir/geri
+    # Defaults to .Chart.AppVersion when empty
+    tag: ""
+    pullPolicy: IfNotPresent
+  freki:
+    repository: ghcr.io/dannysauer/grimnir/freki
+    tag: ""
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# -- Database connection (required)
+database:
+  # Connection URL.  Must use the asyncpg driver prefix:
+  #   postgresql+asyncpg://user:password@host:port/dbname
+  url: ""
+  # Optional: reference an existing Secret instead of creating one.
+  # The Secret must contain the key specified by database.secretKey.
+  existingSecret: ""
+  secretKey: DATABASE_URL
+
+# ── Geri (UDP aggregator) ───────────────────────────────────────────────────
+
+geri:
+  replicaCount: 1
+
+  resources: {}
+  # Uncomment to set limits:
+  # resources:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 64Mi
+  #   limits:
+  #     cpu: 500m
+  #     memory: 256Mi
+
+  # UDP ingress service.  Use LoadBalancer so ESP32s can reach it by stable IP.
+  service:
+    type: LoadBalancer
+    port: 5005
+
+    # Optional: request a specific IP from the load balancer.
+    # Leave empty to let the LB controller assign one automatically.
+    # Example (MetalLB): set to the reserved LAN IP for the aggregator.
+    loadBalancerIP: ""
+
+    # Annotations passed verbatim to the Service.
+    # Use this for MetalLB pool selection, cloud LB config, etc.
+    # Example MetalLB:
+    #   metallb.universe.tf/address-pool: default
+    #   metallb.universe.tf/loadBalancerIPs: 192.168.1.50
+    annotations: {}
+
+  # Extra environment variables for the geri container.
+  env:
+    UDP_HOST: "0.0.0.0"
+    BATCH_SIZE: "50"
+    BATCH_TIMEOUT_MS: "500"
+    LOG_LEVEL: "info"
+
+# ── Freki (backend API + Hlidskjalf dashboard) ─────────────────────────────
+
+freki:
+  replicaCount: 1
+
+  resources: {}
+
+  service:
+    type: ClusterIP
+    port: 8000
+    annotations: {}
+
+  # Ingress for external access to the dashboard and API.
+  # If enabled, configure at minimum one host.
+  ingress:
+    enabled: false
+    className: ""
+
+    # Annotations passed verbatim to the Ingress.
+    # Use this for external-dns, cert-manager, nginx-ingress, etc.
+    # Example:
+    #   external-dns.alpha.kubernetes.io/hostname: grimnir.example.com
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
+    #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    annotations: {}
+
+    hosts:
+      - host: grimnir.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+
+    tls: []
+    # Example:
+    # tls:
+    #   - secretName: grimnir-tls
+    #     hosts:
+    #       - grimnir.example.com
+
+  # Extra environment variables for the freki container.
+  env:
+    HOST: "0.0.0.0"
+    LOG_LEVEL: "info"
