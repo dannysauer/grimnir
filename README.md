@@ -36,6 +36,19 @@ The project uses Norse names for each component, following the raven/wolf theme 
 
 ## Quick Start
 
+### Development Tooling
+
+If you use `asdf`, install the repo-pinned toolchain first:
+
+```bash
+asdf install
+```
+
+This repo currently pins:
+- Python `3.12.7` for the Python services and local test/lint runs
+- Node.js `24.14.1` for repo-local JS tooling if needed later
+- Helm `3.16.2` for chart linting and packaging
+
 ### Database
 
 Install TimescaleDB on your PostgreSQL server, then run the schema:

@@ -118,6 +118,8 @@ grimnir/
 ## Python Conventions
 
 - Python 3.12+
+- Repo-local tool versions are pinned in `.tool-versions` for `asdf`
+  (`python 3.12.7`, `nodejs 24.14.1`, `helm 3.16.2`)
 - All new code uses `pyproject.toml` with `hatchling` build backend
 - Dependencies pinned to specific versions
 - `asyncio` throughout; asyncpg driver at runtime, psycopg2-binary only for Alembic migrations
@@ -206,6 +208,7 @@ explicitly instructed.
 
 To install pre-commit locally:
 ```bash
+asdf install
 pip install pre-commit
 pre-commit install        # installs the git hook
 pre-commit run --all-files  # run manually against all files
