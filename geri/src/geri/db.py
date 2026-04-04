@@ -28,10 +28,21 @@ async def get_or_create_receiver_id(name: str, mac: str) -> int:
     """
     session_factory = get_session_factory()
     async with session_factory() as session:
-        result = await session.execute(select(Receiver.id).where(Receiver.name == name))
-        row = result.scalar_one_or_none()
-        if row is not None:
-            return row
+        result = await session.execute(select(Receiver).where(Receiver.name == name))
+        receiver = result.scalar_one_or_none()
+        if receiver is not None:
+            if receiver.mac != mac:
+                old_mac = receiver.mac
+                receiver.mac = mac
+                await session.commit()
+                log.info(
+                    "receiver.mac_reconciled",
+                    id=receiver.id,
+                    name=name,
+                    old_mac=old_mac,
+                    new_mac=mac,
+                )
+            return receiver.id
 
         stmt = (
             pg_insert(Receiver)

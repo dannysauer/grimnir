@@ -8,12 +8,12 @@ DELETE /api/labels/{id}          delete a label (also clears backfilled labels)
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from csi_models import CsiSample, Label
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import select, text, update
+from sqlalchemy import select, update
 
 from ..db import SessionDep
 
@@ -62,9 +62,10 @@ class LabelOut(BaseModel):
 
 @router.get("", response_model=list[LabelOut])
 async def list_labels(session: SessionDep, minutes: int = 120):
+    cutoff = datetime.now(tz=UTC) - timedelta(minutes=minutes)
     result = await session.execute(
         select(Label)
-        .where(Label.time_end >= text(f"NOW() - INTERVAL '{minutes} minutes'"))
+        .where(Label.time_end >= cutoff)
         .order_by(Label.time_start.desc())
     )
     return result.scalars().all()
@@ -104,16 +105,39 @@ async def delete_label(label_id: int, session: SessionDep):
     if label is None:
         raise HTTPException(status_code=404, detail="Label not found")
 
-    # Clear backfilled labels in the window that match this room
+    # Clear labels in the deleted window, then re-apply any surviving
+    # overlapping labels so deleting one label does not erase another.
     await session.execute(
         update(CsiSample)
         .where(
             CsiSample.time >= label.time_start,
             CsiSample.time < label.time_end,
-            CsiSample.label == label.room,
         )
         .values(label=None)
     )
 
     await session.delete(label)
+    await session.flush()
+
+    overlapping_result = await session.execute(
+        select(Label)
+        .where(
+            Label.time_start < label.time_end,
+            Label.time_end > label.time_start,
+        )
+        .order_by(Label.time_start.asc(), Label.created_at.asc(), Label.id.asc())
+    )
+
+    for overlapping_label in overlapping_result.scalars():
+        overlap_start = max(label.time_start, overlapping_label.time_start)
+        overlap_end = min(label.time_end, overlapping_label.time_end)
+        await session.execute(
+            update(CsiSample)
+            .where(
+                CsiSample.time >= overlap_start,
+                CsiSample.time < overlap_end,
+            )
+            .values(label=overlapping_label.room)
+        )
+
     await session.commit()

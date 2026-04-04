@@ -808,7 +808,8 @@ async function submitLabel() {
   const room      = document.getElementById('label-room').value.trim();
   const startRaw  = document.getElementById('label-start').value;
   const endRaw    = document.getElementById('label-end').value;
-  const occupants = parseInt(document.getElementById('label-occupants').value) || 1;
+  const occupantsRaw = parseInt(document.getElementById('label-occupants').value, 10);
+  const occupants = Number.isNaN(occupantsRaw) ? 1 : occupantsRaw;
   const notes     = document.getElementById('label-notes').value.trim() || null;
 
   if (!room)     { toast('Room is required', 'warn'); return; }
