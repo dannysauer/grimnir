@@ -1,0 +1,345 @@
+{
+  "title": "Grimnir — CSI Localization",
+  "uid": "grimnir-csi-001",
+  "description": "Wi-Fi CSI human presence detection — Geri aggregator + Freki API",
+  "tags": ["grimnir", "csi", "iot"],
+  "timezone": "default",
+  "schemaVersion": 36,
+  "version": 2,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Data Source",
+        "hide": 0
+      },
+      {
+        "name": "namespace",
+        "type": "custom",
+        "label": "Namespace",
+        "query": "grimnir",
+        "current": { "text": "grimnir", "value": "grimnir" },
+        "options": [{ "text": "grimnir", "value": "grimnir", "selected": true }],
+        "hide": 0
+      },
+      {
+        "name": "release",
+        "type": "custom",
+        "label": "Release",
+        "query": "grimnir",
+        "current": { "text": "grimnir", "value": "grimnir" },
+        "options": [{ "text": "grimnir", "value": "grimnir", "selected": true }],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Muninn Receivers",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Active Receivers",
+      "description": "Muninn devices that sent a heartbeat within the last 60 seconds",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 2 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "count(time() - geri_receiver_last_seen_timestamp_seconds{namespace=\"$namespace\"} < 60) or vector(0)",
+          "legendFormat": "active",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Receiver Status",
+      "description": "Last heartbeat time for each Muninn device",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 4, "y": 1, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "dateTimeFromNow" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "receiver_name" },
+            "properties": [
+              { "id": "displayName", "value": "Receiver" },
+              { "id": "custom.width", "value": 160 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "displayName", "value": "Last Seen" },
+              { "id": "unit", "value": "dateTimeFromNow" },
+              { "id": "custom.displayMode", "value": "color-text" },
+              { "id": "thresholds", "value": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": -30000 },
+                  { "color": "red", "value": -60000 }
+                ]
+              }}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [{ "displayName": "Last Seen", "desc": false }]
+      },
+      "targets": [
+        {
+          "expr": "geri_receiver_last_seen_timestamp_seconds{namespace=\"$namespace\"} * 1000",
+          "legendFormat": "{{receiver_name}}",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        { "id": "labelsToFields", "options": { "valueLabel": "receiver_name" } },
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "namespace": true, "job": true, "instance": true } } }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Packet Ingestion Rate",
+      "description": "UDP CSI packets received per second, by receiver",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 16, "y": 1, "w": 8, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "pps", "min": 0 }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "rate(geri_packets_received_total{namespace=\"$namespace\"}[1m])",
+          "legendFormat": "{{receiver_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Geri — UDP Aggregator",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Invalid Packets / s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 10, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "rate(geri_packets_invalid_total{namespace=\"$namespace\"}[1m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Dropped Packets / s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 4, "y": 10, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "rate(geri_packets_dropped_total{namespace=\"$namespace\"}[1m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Batch Write Rate & Latency",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 8, "y": 10, "w": 16, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "min": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "writes/s" }, "properties": [{ "id": "unit", "value": "ops" }, { "id": "custom.axisPlacement", "value": "left" }] },
+          { "matcher": { "id": "byName", "options": "latency p95" }, "properties": [{ "id": "unit", "value": "s" }, { "id": "custom.axisPlacement", "value": "right" }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "rate(geri_batch_writes_total{namespace=\"$namespace\", status=\"success\"}[1m])",
+          "legendFormat": "writes/s",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(geri_batch_write_duration_seconds_bucket{namespace=\"$namespace\"}[5m]))",
+          "legendFormat": "latency p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Freki — API",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 1 }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (handler) (rate(http_request_duration_seconds_count{namespace=\"$namespace\", job=~\"$release-freki\"}[1m]))",
+          "legendFormat": "{{handler}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "HTTP Latency p50 / p95",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 12, "y": 19, "w": 8, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{namespace=\"$namespace\", job=~\"$release-freki\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"$namespace\", job=~\"$release-freki\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "SSE Connections",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 20, "y": 19, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "sum(freki_sse_connections_active{namespace=\"$namespace\"})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Infrastructure",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 1 }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "CPU Usage",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$release-.*\", container!=\"\", container!=\"POD\"}[1m]))",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Memory Usage",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (container) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$release-.*\", container!=\"\", container!=\"POD\"})",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

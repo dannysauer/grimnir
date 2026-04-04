@@ -1,0 +1,145 @@
+name: Chart Release
+
+on:
+  # Called from release.yml after a successful container build
+  workflow_call:
+    inputs:
+      app_version:
+        description: Application version to embed in the chart (e.g. v1.2.3)
+        type: string
+        required: false
+        default: ""
+
+  # Also trigger on standalone changes to the chart source
+  push:
+    branches:
+      - main
+    paths:
+      - "bifrost/helm/**"
+
+permissions:
+  contents: write   # create tags + releases
+  packages: write   # push chart to GHCR OCI registry
+
+jobs:
+  chart-release:
+    name: Package and publish chart
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Calculate next chart version
+        id: version
+        run: |
+          # Chart versions track separately from app versions via chart-v* tags
+          LAST_TAG=$(git tag -l 'chart-v*.*.*' --sort=-version:refname | head -1)
+          if [ -z "$LAST_TAG" ]; then
+            LAST_TAG="chart-v0.0.0"
+            # Always release if no prior chart tag
+            BUMP=patch
+          else
+            # Check for chart changes since last chart tag
+            CHANGED=$(git diff --name-only "${LAST_TAG}..HEAD" -- bifrost/helm/ 2>/dev/null || echo "changed")
+            if [ -z "$CHANGED" ]; then
+              echo "No chart changes since $LAST_TAG, skipping"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # Inspect commit messages touching the chart since last chart tag
+            COMMITS=$(git log "${LAST_TAG}..HEAD" --oneline -- bifrost/helm/)
+            if echo "$COMMITS" | grep -qE '^\S+ feat(\(.+\))?(!)?:'; then
+              BUMP=minor
+            else
+              BUMP=patch
+            fi
+          fi
+
+          MAJOR=$(echo "$LAST_TAG" | sed 's/chart-v\([0-9]*\)\..*/\1/')
+          MINOR=$(echo "$LAST_TAG" | sed 's/chart-v[0-9]*\.\([0-9]*\)\..*/\1/')
+          PATCH=$(echo "$LAST_TAG" | sed 's/chart-v[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
+
+          if [ "$BUMP" = "minor" ]; then
+            MINOR=$((MINOR + 1)); PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          CHART_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "release=true"              >> "$GITHUB_OUTPUT"
+          echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update Chart.yaml versions
+        if: steps.version.outputs.release == 'true'
+        run: |
+          CHART_FILE="bifrost/helm/grimnir/Chart.yaml"
+          CHART_VERSION="${{ steps.version.outputs.chart_version }}"
+
+          # Update chart version
+          sed -i "s/^version:.*/version: ${CHART_VERSION}/" "$CHART_FILE"
+
+          # Update appVersion if provided by the calling workflow
+          APP_VERSION="${{ inputs.app_version }}"
+          if [ -n "$APP_VERSION" ]; then
+            # Strip leading 'v' for appVersion field (Helm convention allows either,
+            # but keeping it consistent with the image tag)
+            sed -i "s/^appVersion:.*/appVersion: \"${APP_VERSION}\"/" "$CHART_FILE"
+          fi
+
+          echo "Chart.yaml after update:"
+          grep -E '^(version|appVersion):' "$CHART_FILE"
+
+      - name: Lint chart
+        if: steps.version.outputs.release == 'true'
+        run: helm lint bifrost/helm/grimnir/
+
+      - name: Log in to GHCR
+        if: steps.version.outputs.release == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package and push chart to GHCR OCI
+        if: steps.version.outputs.release == 'true'
+        run: |
+          CHART_VERSION="${{ steps.version.outputs.chart_version }}"
+          helm package bifrost/helm/grimnir/ --version "$CHART_VERSION"
+          helm push "grimnir-${CHART_VERSION}.tgz" oci://ghcr.io/dannysauer/charts
+
+      - name: Create chart tag and GitHub release
+        if: steps.version.outputs.release == 'true'
+        run: |
+          CHART_VERSION="${{ steps.version.outputs.chart_version }}"
+          git tag "chart-v${CHART_VERSION}"
+          git push origin "chart-v${CHART_VERSION}"
+
+      - name: Create GitHub release for chart
+        if: steps.version.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chart-v${{ steps.version.outputs.chart_version }}
+          name: "chart-v${{ steps.version.outputs.chart_version }}"
+          files: "grimnir-${{ steps.version.outputs.chart_version }}.tgz"
+          body: |
+            ## Grimnir Helm chart v${{ steps.version.outputs.chart_version }}
+
+            Install:
+            ```bash
+            helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
+              --version ${{ steps.version.outputs.chart_version }} \
+              --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"
+            ```
+
+            Upgrade:
+            ```bash
+            helm upgrade grimnir oci://ghcr.io/dannysauer/charts/grimnir \
+              --version ${{ steps.version.outputs.chart_version }} \
+              --reuse-values
+            ```

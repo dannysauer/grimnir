@@ -1,0 +1,162 @@
+# Default values for grimnir.
+# Override these with --set or a custom values file.
+
+# -- Container images
+image:
+  geri:
+    repository: ghcr.io/dannysauer/grimnir/geri
+    # Defaults to .Chart.AppVersion when empty
+    tag: ""
+    pullPolicy: IfNotPresent
+  freki:
+    repository: ghcr.io/dannysauer/grimnir/freki
+    tag: ""
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# -- Database connection (required)
+database:
+  # Connection URL — must use the asyncpg driver prefix:
+  #   postgresql+asyncpg://user:password@host:port/dbname
+  url: ""
+  # Optional: reference an existing Secret instead of creating one.
+  # The Secret must contain the key specified by database.secretKey.
+  existingSecret: ""
+  secretKey: DATABASE_URL
+
+# ── Geri (UDP aggregator) ───────────────────────────────────────────────────
+
+geri:
+  # Geri is safe to scale horizontally: Kubernetes UDP load-balancing is
+  # per-5-tuple (consistent per source IP+port), so each Muninn device will
+  # always hit the same replica. DB writes use ON CONFLICT, so all operations
+  # are idempotent. A single replica is sufficient for most deployments.
+  replicaCount: 1
+
+  resources: {}
+  # resources:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 64Mi
+  #   limits:
+  #     cpu: 500m
+  #     memory: 256Mi
+
+  # UDP ingress service — use LoadBalancer so ESP32s can reach it by stable IP.
+  # The IP is assigned automatically from your load-balancer pool; set a DNS
+  # record pointing AGGREGATOR_HOST (firmware/config.h) at the assigned IP, or
+  # use external-dns to do it automatically via the hostname annotation below.
+  service:
+    type: LoadBalancer
+    port: 5005
+
+    # Annotations passed verbatim to the Service.
+    # MetalLB pool selection + external-dns hostname (no static IP needed):
+    #   metallb.universe.tf/address-pool: default
+    #   external-dns.alpha.kubernetes.io/hostname: csi-aggregator.home.example.com
+    annotations: {}
+
+  # Extra environment variables for the geri container.
+  env:
+    UDP_HOST: "0.0.0.0"
+    BATCH_SIZE: "50"
+    BATCH_TIMEOUT_MS: "500"
+    LOG_LEVEL: "info"
+    # Prometheus metrics HTTP port. Set to "0" to disable.
+    METRICS_PORT: "8001"
+
+# ── Freki (backend API + Hlidskjalf dashboard) ─────────────────────────────
+
+freki:
+  # Freki is fully stateless and safe to scale horizontally. sessionAffinity
+  # is set to ClientIP on the Service to keep long-lived SSE connections on
+  # the same pod and avoid unnecessary reconnects during rolling updates.
+  replicaCount: 1
+
+  resources: {}
+
+  service:
+    type: ClusterIP
+    port: 8000
+    annotations: {}
+
+  # Ingress for external access to the dashboard and API.
+  ingress:
+    enabled: false
+    className: ""
+
+    # Annotations for external-dns, cert-manager, nginx-ingress, etc.
+    # Example — hostname + TLS:
+    #   external-dns.alpha.kubernetes.io/hostname: grimnir.home.example.com
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
+    #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    annotations: {}
+
+    hosts:
+      - host: grimnir.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+
+    tls: []
+
+  # Extra environment variables for the freki container.
+  env:
+    HOST: "0.0.0.0"
+    LOG_LEVEL: "info"
+
+# ── Vertical Pod Autoscaler ─────────────────────────────────────────────────
+# Requires the VPA CRD to be installed in the cluster.
+# https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler
+vpa:
+  enabled: false
+  # "Off"     — emit recommendations only; no pod changes (safe starting point)
+  # "Initial" — apply recommendations at pod creation; no evictions
+  # "Recreate"— apply and recreate pods to right-size (mild disruption)
+  # "Auto"    — apply and evict pods continuously (can disrupt SSE connections)
+  updateMode: "Off"
+  geri:
+    minAllowed:
+      cpu: 50m
+      memory: 64Mi
+    maxAllowed:
+      cpu: "2"
+      memory: 512Mi
+  freki:
+    minAllowed:
+      cpu: 50m
+      memory: 128Mi
+    maxAllowed:
+      cpu: "2"
+      memory: 512Mi
+
+# ── Prometheus metrics ──────────────────────────────────────────────────────
+# Geri: exposes /metrics on a dedicated port (geri.env.METRICS_PORT).
+# Freki: exposes /metrics on the same HTTP port as the API (freki.service.port).
+prometheus:
+  serviceMonitor:
+    # Create ServiceMonitor resources for Prometheus Operator discovery.
+    # Requires prometheus-operator CRDs (e.g. kube-prometheus-stack).
+    enabled: false
+    # Namespace for the ServiceMonitors; defaults to the release namespace.
+    namespace: ""
+    interval: 15s
+    scrapeTimeout: 10s
+    # Additional labels to match your Prometheus Operator's serviceMonitorSelector.
+    # kube-prometheus-stack default requires no extra labels (matchAll).
+    labels: {}
+
+# ── Grafana dashboard ───────────────────────────────────────────────────────
+grafana:
+  dashboard:
+    # Create a ConfigMap containing the Grimnir Grafana dashboard.
+    # Requires the Grafana sidecar (bundled with kube-prometheus-stack).
+    # The sidecar watches for ConfigMaps with the label below and auto-imports them.
+    enabled: false
+    # Folder to place the dashboard in (the dashboard name is always "Grimnir").
+    folder: "Grimnir"
+    # Label key and value that the Grafana sidecar watches for.
+    # kube-prometheus-stack default: grafana_dashboard: "1"
+    sidecarLabel: grafana_dashboard
+    sidecarLabelValue: "1"

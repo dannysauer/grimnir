@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Grimnir — Database Schema (Mimir)
--- Requires: PostgreSQL 14+ with TimescaleDB extension
+-- Requires: PostgreSQL 12+ with TimescaleDB 2.11+
 --
 -- Install TimescaleDB first:
 --   https://docs.timescale.com/self-hosted/latest/install/
@@ -89,7 +89,8 @@ SELECT
     time_bucket('1 minute', time)  AS bucket,
     receiver_id,
     COUNT(*)                        AS sample_count,
-    AVG(rssi)                       AS avg_rssi,
+    AVG(rssi)::float                AS avg_rssi,
+    STDDEV(rssi)::float             AS stddev_rssi,
     -- Scalar variance proxy: mean of per-sample amplitude variance
     AVG(
         (SELECT VARIANCE(v) FROM UNNEST(amplitude) AS v)

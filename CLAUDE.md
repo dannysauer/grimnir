@@ -41,7 +41,22 @@ See `GRIMNIR.md` for the full naming reference. Summary:
 grimnir/
 ├── CLAUDE.md
 ├── GRIMNIR.md                      # Naming reference (see this for full Norse map)
+├── TODO.md                         # Checklist cross-referencing GitHub issues
 ├── .env.example                    # Environment variable template
+├── .pre-commit-config.yaml         # pre-commit hook configuration
+├── pyproject.toml                  # Root ruff/tool config (not a package)
+├── renovate.json5                  # Renovate dependency update config (SHA-pinned)
+├── .claude/
+│   ├── settings.json               # Claude Code hooks (runs pre-commit before commits)
+│   └── hooks/
+│       └── pre-commit-check.sh     # PreToolUse hook script
+├── docs/
+│   ├── firmware-build-and-flash.md # Linux + Windows firmware build guide
+│   └── style-guides/
+│       └── google/                 # Google style guides (git subtree, gh-pages branch)
+│           ├── pyguide.md          # Python style guide
+│           ├── shellguide.md       # Shell style guide
+│           └── ...                 # cppguide.html, jsguide.html, etc.
 ├── mimir/
 │   └── 001_schema.sql              # Database schema — run once to set up TimescaleDB
 ├── geri/                           # UDP → TimescaleDB writer
@@ -50,13 +65,15 @@ grimnir/
 │   └── src/geri/
 │       ├── main.py                 # UDP listener + batch writer + startup sequence
 │       ├── parser.py               # Binary CSI packet parser (mirrors firmware format)
-│       └── db.py                   # SQLAlchemy insert helpers
+│       ├── db.py                   # SQLAlchemy insert helpers
+│       └── metrics.py              # Prometheus metrics definitions
 ├── freki/                          # FastAPI REST + SSE
 │   ├── pyproject.toml
 │   ├── Dockerfile
 │   └── src/freki/
 │       ├── main.py                 # FastAPI app + startup sequence
 │       ├── db.py                   # SessionDep FastAPI dependency
+│       ├── metrics.py              # Prometheus metrics definitions
 │       └── routers/
 │           ├── stream.py           # GET /api/stream  (SSE, 1s updates)
 │           ├── history.py          # GET /api/history/variance|snapshot|receivers
@@ -65,27 +82,38 @@ grimnir/
 │   └── index.html                  # Single-file mobile-first dashboard (vanilla JS)
 ├── firmware/
 │   ├── config.h                    # ← EDIT BEFORE FLASHING each board
-│   ├── huginn/main/main.c          # Transmitter ESP-IDF v5.1+ C firmware
-│   └── muninn/main/main.c          # Receiver ESP-IDF v5.1+ C firmware
+│   ├── huginn/
+│   │   ├── platformio.ini          # PlatformIO build (framework = espidf)
+│   │   └── main/main.c             # Transmitter ESP-IDF v5.1+ C firmware
+│   └── muninn/
+│       ├── platformio.ini          # PlatformIO build (framework = espidf)
+│       └── main/main.c             # Receiver ESP-IDF v5.1+ C firmware
 └── bifrost/                        # Deployment: Compose + Helm + Ansible
     ├── compose.yaml
-    ├── helm/
-    └── ansible/deploy.yaml
+    ├── helm/grimnir/               # Helm chart (both geri + freki)
+    │   ├── Chart.yaml
+    │   ├── values.yaml             # All options documented inline
+    │   ├── files/
+    │   │   └── grimnir-dashboard.json  # Grafana dashboard (Helm .Files.Get)
+    │   └── templates/              # Kubernetes manifests
+    └── ansible/deploy.yaml         # Ansible → Helm deploy with MetalLB/external-dns
 ```
 
 ## Technology Stack
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Firmware | C, ESP-IDF v5.1+ | ESP32-S3 target |
+| Firmware | C, ESP-IDF v5.1+ | ESP32-S3 target; build locally (see `docs/firmware-build-and-flash.md`) |
 | Transport | UDP binary packets | Custom wire format, see below |
-| Aggregator | Python 3.12, asyncio | SQLAlchemy async + asyncpg |
-| Database | PostgreSQL 12 + TimescaleDB 2.11.2 | On humpy (not containerised) |
+| Aggregator | Python 3.12, asyncio | SQLAlchemy async + asyncpg; prometheus-client for metrics |
+| Database | PostgreSQL 12 + TimescaleDB 2.11.2 | External server (not containerised) |
 | ORM / Migrations | SQLAlchemy 2.0, Alembic | models package shared by all services |
-| Backend | FastAPI, uvicorn | SSE + REST |
+| Backend | FastAPI, uvicorn | SSE + REST; prometheus-fastapi-instrumentator for metrics |
 | Frontend | Vanilla JS, Chart.js 4, date-fns adapter | Single HTML file |
 | Containers | Docker, Docker Compose | Build context is repo root |
-| Kubernetes | Helm chart + Ansible playbook | Uses external DB on humpy |
+| Kubernetes | Helm chart + Ansible playbook | Uses external DB; MetalLB + external-dns optional |
+| Observability | prometheus-client, prometheus-fastapi-instrumentator | Geri metrics on `:8001/metrics`; Freki on `:8000/metrics` |
+| Helm extras | VPA, ServiceMonitor, Grafana sidecar ConfigMap | All disabled by default; enable via values |
 
 ## Python Conventions
 
@@ -93,8 +121,107 @@ grimnir/
 - All new code uses `pyproject.toml` with `hatchling` build backend
 - Dependencies pinned to specific versions
 - `asyncio` throughout; asyncpg driver at runtime, psycopg2-binary only for Alembic migrations
-- `structlog` for logging in all services
+- `structlog` for logging in all services — **always JSON** (see Logging Requirements below)
 - Type hints everywhere; `from __future__ import annotations` at top of each file
+
+## Logging Requirements
+
+**All services MUST emit structured JSON logs via structlog.** Use this exact
+configuration in every service `main.py`:
+
+```python
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(
+        getattr(logging, LOG_LEVEL, logging.INFO)
+    ),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
+)
+```
+
+Use `log.info("event.name", key=value)` — event names use dot notation
+(e.g. `"db.batch_inserted"`, `"aggregator.starting"`). Never use f-strings
+in log messages; pass data as keyword arguments.
+
+uvicorn access logs are disabled (`access_log=False`) — request metrics are
+handled by Prometheus instead.
+
+## Documentation Requirements
+
+When adding new capabilities, environment variables, dependencies, configuration
+options, API endpoints, or breaking changes, **always** update:
+
+1. **`CLAUDE.md`** — authoritative reference for Claude agents; update the
+   relevant sections (stack table, env vars, API table, etc.)
+2. **`TODO.md`** — check off completed items; add new follow-up items with
+   GitHub issue numbers where relevant
+3. **`README.md`** — if the change is user-visible (new quick-start step,
+   new component, changed endpoint, etc.)
+4. **`pyproject.toml`** — add any new runtime dependencies with pinned versions
+5. **GitHub issues** — create issues for significant follow-up work via the
+   `mcp__github__issue_write` tool
+
+These updates are not optional — they ensure continuity across agent sessions.
+
+## Code Style
+
+This project uses the **Google style guides** for all languages. The guides are
+vendored as a git subtree at `docs/style-guides/google/` and are always
+available without a network connection.
+
+| Language | Guide |
+|----------|-------|
+| Python | `docs/style-guides/google/pyguide.md` |
+| Shell | `docs/style-guides/google/shellguide.md` |
+| C (firmware) | `docs/style-guides/google/cppguide.html` (C++ guide; apply C-compatible rules) |
+| HTML/CSS | `docs/style-guides/google/htmlcssguide.html` |
+| JavaScript | `docs/style-guides/google/jsguide.html` |
+
+Key Python rules from the Google guide that apply here:
+- 4-space indentation (enforced by ruff-format)
+- `"""Docstrings."""` for all public functions/classes
+- Type annotations on all function signatures
+- `from __future__ import annotations` at the top of every file
+- No mutable default arguments
+- Prefer `with` statements for resource management
+
+To update the style guides to the latest version:
+```bash
+git subtree pull --prefix=docs/style-guides/google \
+  https://github.com/google/styleguide.git gh-pages --squash
+```
+
+## Pre-Commit
+
+All commits **must** pass pre-commit checks. The hooks run automatically via
+the `.claude/settings.json` PreToolUse hook — do not use `--no-verify` unless
+explicitly instructed.
+
+To install pre-commit locally:
+```bash
+pip install pre-commit
+pre-commit install        # installs the git hook
+pre-commit run --all-files  # run manually against all files
+```
+
+Hooks configured in `.pre-commit-config.yaml`:
+- **trailing-whitespace**, **end-of-file-fixer**, **check-yaml**, **check-json**,
+  **check-merge-conflict** — general hygiene
+- **ruff** — Python linting with auto-fix (E, F, I/isort, W, UP, B rules)
+- **ruff-format** — Python formatting (black-compatible, 100-char lines)
+- **shellcheck** — shell script linting (warning severity)
+- **actionlint** — GitHub Actions workflow linting (including inline shell)
+
+pre-commit.ci runs on every PR and auto-pushes fixes. Chart templates
+(`bifrost/helm/grimnir/templates/`) are excluded from YAML checking because
+Helm's `{{ }}` syntax is not valid YAML.
 
 ## Database
 
@@ -215,38 +342,62 @@ ansible-playbook bifrost/ansible/deploy.yaml \
   -e aggregator_lb_ip="192.168.1.50"
 ```
 
-The geri Service should be type LoadBalancer so ESP32s can reach it by
-stable LAN IP. Set a DNS A record `geri.home.arpa` (or `csi-aggregator.home.arpa`)
-pointing at that IP.
+The geri Service should be type LoadBalancer. Use MetalLB address pool annotations
+and external-dns `hostname` annotation to get an IP from the pool and create DNS
+automatically — no static IP configuration required:
+
+```yaml
+geri:
+  service:
+    annotations:
+      metallb.universe.tf/address-pool: default
+      external-dns.alpha.kubernetes.io/hostname: csi-aggregator.home.example.com
+```
 
 ## Firmware
 
-- ESP-IDF v5.1+, target `esp32s3`
+See `docs/firmware-build-and-flash.md` for full Linux and Windows build instructions.
+
+- ESP-IDF v5.1+, target `esp32s3`; firmware is built locally (credentials embedded)
+- **Two build systems supported** — use whichever you have installed:
+  - **ESP-IDF CLI** (`idf.py build flash monitor`) — see Linux/Windows sections in the guide
+  - **PlatformIO CLI** (`pio run -t upload`) — uses `firmware/{huginn,muninn}/platformio.ini`;
+    must use `framework = espidf` (CSI APIs are not available in the Arduino framework)
 - Edit `firmware/config.h` before each flash:
   - `WIFI_SSID` / `WIFI_PASSWORD`
   - `AGGREGATOR_HOST` — DNS name of aggregator (resolved via DHCP-provided DNS)
   - `RECEIVER_NAME` — unique per board (e.g. `"rx_ground"`, `"rx_upstairs"`)
-- Recommended installer: IDF Installation Manager GUI (`eim-gui-windows-x64.msi`)
-- Flash: `idf.py set-target esp32s3 && idf.py build flash monitor`
 - New receivers auto-register in the DB on first packet — no manual setup needed
+
+## Observability
+
+Geri exposes Prometheus metrics on `METRICS_PORT` (default `8001`):
+- `geri_packets_received_total{receiver_name}` — ingestion counter
+- `geri_packets_invalid_total` — parse failure counter
+- `geri_packets_dropped_total` — queue-full drop counter
+- `geri_batch_writes_total{status}` — DB write counter
+- `geri_batch_write_duration_seconds` — DB write latency histogram
+- `geri_batch_size_rows` — rows-per-batch histogram
+
+Freki exposes metrics via `prometheus-fastapi-instrumentator` at `GET /metrics`:
+- `http_request_duration_seconds{handler,method,status}` — request latency histogram
+- `freki_sse_connections_active` — live SSE connection gauge
+
+Helm chart supports optional `ServiceMonitor` resources and a Grafana sidecar
+`ConfigMap` — enable via `prometheus.serviceMonitor.enabled` and
+`grafana.dashboard.enabled`.
 
 ## Known TODOs / Areas for Claude Code to Address
 
-- [ ] **Mimir package not yet implemented** — `geri` and `freki` both import
-      `from csi_models import ...` but `mimir/` only has `001_schema.sql` so far;
-      the SQLAlchemy models, engine factory, and Alembic migrations need to be written
-      before either service can run
-- [ ] `hlidskjalf` has no error state for failed SSE connections beyond the dot colour
-- [ ] No tests exist yet — pytest + pytest-asyncio for geri/freki,
-      coverage of `geri/src/geri/parser.py` is highest priority
-- [ ] Helm values `aggregatorLoadBalancerIP` is passed as empty string when not
-      set — Helm template should use `if` guard to omit the field entirely rather
-      than setting it to `""`
-- [ ] Phase calibration — raw phase data is hardware-offset-contaminated; amplitude
-      is reliable for presence detection. Phase sanitization should be added as a
-      preprocessing step before ML training.
-- [ ] HTTPS / auth on freki — no authentication currently. Put behind nginx +
-      basic auth before exposing beyond localhost.
+See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
+
+- [ ] **Mimir package** (#1) — `geri` and `freki` cannot run until SQLAlchemy
+      models, Alembic migrations, engine factory, and `migrate.py` are built
+- [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
+- [ ] **SQL injection in labels.py** (#6) — `list_labels` builds raw INTERVAL clause
+- [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth
+- [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
+- [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
 
 ## ML Pipeline (Future)
 

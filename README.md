@@ -58,7 +58,7 @@ docker compose -f bifrost/compose.yaml up -d
 
 ```bash
 helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
-  --set database.url="postgresql+asyncpg://csi_user:changeme@humpy.home.arpa:5432/csi" \
+  --set database.url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi" \
   --set geri.service.type=LoadBalancer
 ```
 

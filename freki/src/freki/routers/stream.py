@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+from csi_models import Receiver, ReceiverHeartbeat, get_session_factory
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 
-from csi_models import Receiver, ReceiverHeartbeat, get_session_factory
+from ..metrics import sse_connections_active
 
 router = APIRouter()
 
@@ -31,14 +32,14 @@ WINDOW_S = 30  # look back this many seconds for recent RSSI stats
 
 async def _fetch_snapshot() -> dict:
     factory = get_session_factory()
-    since = datetime.now(tz=timezone.utc) - timedelta(seconds=WINDOW_S)
+    since = datetime.now(tz=UTC) - timedelta(seconds=WINDOW_S)
 
     async with factory() as session:
         # All active receivers with their heartbeat
         result = await session.execute(
             select(Receiver, ReceiverHeartbeat)
             .outerjoin(ReceiverHeartbeat, Receiver.id == ReceiverHeartbeat.receiver_id)
-            .where(Receiver.active == True)
+            .where(Receiver.active.is_(True))
             .order_by(Receiver.id)
         )
         rows = result.all()
@@ -73,7 +74,9 @@ async def _fetch_snapshot() -> dict:
                 "location": receiver.location,
                 "role": receiver.role,
                 "last_seen": heartbeat.last_seen.isoformat() if heartbeat else None,
-                "ip_address": str(heartbeat.ip_address) if heartbeat and heartbeat.ip_address else None,
+                "ip_address": str(heartbeat.ip_address)
+                if heartbeat and heartbeat.ip_address
+                else None,
                 "avg_rssi": round(s.avg_rssi, 1) if s and s.avg_rssi is not None else None,
                 "stddev_rssi": round(s.stddev_rssi, 3) if s and s.stddev_rssi is not None else None,
                 "sample_count": s.sample_count if s else 0,
@@ -81,13 +84,14 @@ async def _fetch_snapshot() -> dict:
         )
 
     return {
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "timestamp": datetime.now(tz=UTC).isoformat(),
         "window_s": WINDOW_S,
         "receivers": receivers,
     }
 
 
 async def _event_generator():
+    sse_connections_active.inc()
     try:
         while True:
             try:
@@ -98,6 +102,8 @@ async def _event_generator():
             await asyncio.sleep(POLL_INTERVAL_S)
     except asyncio.CancelledError:
         pass
+    finally:
+        sse_connections_active.dec()
 
 
 @router.get("/stream")

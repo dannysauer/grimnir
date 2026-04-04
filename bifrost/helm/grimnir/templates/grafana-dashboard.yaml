@@ -1,0 +1,17 @@
+{{- if .Values.grafana.dashboard.enabled }}
+# Grafana sidecar ConfigMap — auto-imported by the kube-prometheus-stack Grafana sidecar.
+# The sidecar watches for ConfigMaps with the label below in all namespaces.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-dashboard" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    {{ .Values.grafana.dashboard.sidecarLabel }}: {{ .Values.grafana.dashboard.sidecarLabelValue | quote }}
+  annotations:
+    # Grafana sidecar uses this annotation to place the dashboard in a folder.
+    grafana_folder: {{ .Values.grafana.dashboard.folder | quote }}
+data:
+  grimnir-dashboard.json: |
+{{ .Files.Get "files/grimnir-dashboard.json" | indent 4 }}
+{{- end }}

@@ -22,13 +22,15 @@ import asyncio
 import logging
 import os
 import signal
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
 
 import structlog
-
 from csi_models import init_engine, run_migrations
+from prometheus_client import start_http_server
 
 from .db import get_or_create_receiver_id, insert_batch, upsert_heartbeat
+from .metrics import packets_dropped, packets_invalid, packets_received, receiver_last_seen
 from .parser import ParseError, parse_packet
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -39,11 +41,20 @@ UDP_PORT = int(os.environ.get("UDP_PORT", "5005"))
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "50"))
 BATCH_TIMEOUT_MS = int(os.environ.get("BATCH_TIMEOUT_MS", "500"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
+# Set to 0 to disable the Prometheus HTTP server
+METRICS_PORT = int(os.environ.get("METRICS_PORT", "8001"))
 
 structlog.configure(
-    wrapper_class=structlog.make_filtering_bound_logger(
-        getattr(logging, LOG_LEVEL, logging.INFO)
-    )
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, LOG_LEVEL, logging.INFO)),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
 )
 log = structlog.get_logger(__name__)
 
@@ -63,13 +74,16 @@ class CSIUDPProtocol(asyncio.DatagramProtocol):
             pkt = parse_packet(data)
         except ParseError as exc:
             log.warning("udp.parse_error", addr=addr, error=str(exc))
+            packets_invalid.inc()
             return
 
-        wall_time = datetime.now(tz=timezone.utc)
+        packets_received.labels(receiver_name=pkt.receiver_name).inc()
+        wall_time = datetime.now(tz=UTC)
         try:
             self._queue.put_nowait((wall_time, addr[0], pkt))
         except asyncio.QueueFull:
             self._dropped += 1
+            packets_dropped.inc()
             if self._dropped % 100 == 1:
                 log.warning("udp.queue_full", dropped_total=self._dropped)
 
@@ -91,10 +105,8 @@ async def batch_writer(queue: asyncio.Queue) -> None:
 
     while True:
         try:
-            wall_time, src_ip, pkt = await asyncio.wait_for(
-                queue.get(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
+            wall_time, src_ip, pkt = await asyncio.wait_for(queue.get(), timeout=timeout)
+        except TimeoutError:
             if batch:
                 await insert_batch(batch)
                 batch = []
@@ -105,16 +117,15 @@ async def batch_writer(queue: asyncio.Queue) -> None:
             return
 
         if pkt.receiver_name not in receiver_cache:
-            receiver_id = await get_or_create_receiver_id(
-                pkt.receiver_name, pkt.transmitter_mac
-            )
+            receiver_id = await get_or_create_receiver_id(pkt.receiver_name, pkt.transmitter_mac)
             receiver_cache[pkt.receiver_name] = receiver_id
         receiver_id = receiver_cache[pkt.receiver_name]
 
-        now = asyncio.get_event_loop().time()
+        now = asyncio.get_running_loop().time()
         if now - last_heartbeat.get(receiver_id, 0.0) > heartbeat_interval:
             await upsert_heartbeat(receiver_id, ip_address=src_ip)
             last_heartbeat[receiver_id] = now
+            receiver_last_seen.labels(receiver_name=pkt.receiver_name).set(time.time())
 
         batch.append((wall_time, receiver_id, pkt))
         if len(batch) >= BATCH_SIZE:
@@ -127,6 +138,10 @@ async def batch_writer(queue: asyncio.Queue) -> None:
 
 async def main() -> None:
     log.info("aggregator.starting")
+
+    if METRICS_PORT > 0:
+        start_http_server(METRICS_PORT)
+        log.info("metrics.listening", port=METRICS_PORT)
 
     log.info("migrations.running")
     run_migrations(DATABASE_URL)

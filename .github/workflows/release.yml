@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write       # create releases + tags
+  packages: write       # push to GHCR
+
+jobs:
+  # ── Version calculation ────────────────────────────────────────────────────
+  version:
+    name: Calculate version
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.calc.outputs.release }}
+      version: ${{ steps.calc.outputs.version }}
+      changelog: ${{ steps.calc.outputs.changelog }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for tag inspection
+
+      - name: Calculate next version
+        id: calc
+        run: |
+          # Find the most recent v*.*.* tag
+          LAST_TAG=$(git tag -l 'v*.*.*' --sort=-version:refname | head -1)
+          if [ -z "$LAST_TAG" ]; then
+            LAST_TAG="v0.0.0"
+            COMMITS=$(git log --oneline)
+          else
+            COMMITS=$(git log "${LAST_TAG}..HEAD" --oneline)
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No commits since $LAST_TAG, skipping release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Parse semver components
+          MAJOR=$(echo "$LAST_TAG" | sed 's/v\([0-9]*\)\..*/\1/')
+          MINOR=$(echo "$LAST_TAG" | sed 's/v[0-9]*\.\([0-9]*\)\..*/\1/')
+          PATCH=$(echo "$LAST_TAG" | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
+
+          # Check for breaking changes first
+          FULL_LOG=$(git log "${LAST_TAG}..HEAD" --format="%B---COMMIT_SEP---")
+          if echo "$FULL_LOG" | grep -q "BREAKING CHANGE"; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+          elif echo "$COMMITS" | grep -qE '^\S+ feat(\(.+\))?(!)?:'; then
+            MINOR=$((MINOR + 1)); PATCH=0
+          elif echo "$COMMITS" | grep -qE '^\S+ (fix|chore)(\(.+\))?(!)?:'; then
+            PATCH=$((PATCH + 1))
+          else
+            echo "No releasable commits (feat/fix/chore) since $LAST_TAG, skipping"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "release=true"    >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Build changelog from conventional commits since last tag
+          CHANGELOG=$(git log "${LAST_TAG}..HEAD" --pretty=format:"- %s" \
+            | grep -E '^- (feat|fix|chore|docs|refactor|perf)' \
+            || true)
+          # GitHub output multiline escaping
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # ── Build and push container images ───────────────────────────────────────
+  images:
+    name: Build images (${{ matrix.service }})
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [geri, freki]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/dannysauer/grimnir/${{ matrix.service }}:${{ needs.version.outputs.version }}
+            ghcr.io/dannysauer/grimnir/${{ matrix.service }}:latest
+          labels: |
+            org.opencontainers.image.title=grimnir-${{ matrix.service }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/dannysauer/grimnir
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+  # ── Create GitHub release + tag ────────────────────────────────────────────
+  release:
+    name: Create release
+    needs: [version, images]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create git tag
+        run: |
+          git tag "${{ needs.version.outputs.version }}"
+          git push origin "${{ needs.version.outputs.version }}"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.version }}
+          name: ${{ needs.version.outputs.version }}
+          body: |
+            ## Changes
+
+            ${{ needs.version.outputs.changelog }}
+
+            ## Container images
+
+            ```
+            ghcr.io/dannysauer/grimnir/geri:${{ needs.version.outputs.version }}
+            ghcr.io/dannysauer/grimnir/freki:${{ needs.version.outputs.version }}
+            ```
+
+            ## Helm chart
+
+            ```bash
+            helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
+              --version <chart-version> \
+              --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"
+            ```
+          generate_release_notes: false
+
+  # ── Trigger chart release with updated appVersion ─────────────────────────
+  chart-release:
+    name: Trigger chart release
+    needs: [version, release]
+    if: needs.version.outputs.release == 'true'
+    uses: ./.github/workflows/chart-release.yml
+    with:
+      app_version: ${{ needs.version.outputs.version }}
+    permissions:
+      contents: write
+      packages: write

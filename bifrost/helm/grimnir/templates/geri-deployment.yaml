@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-geri" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: geri
+spec:
+  replicas: {{ .Values.geri.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "grimnir.selectorLabels" (merge (dict "component" "geri") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "grimnir.selectorLabels" (merge (dict "component" "geri") .) | nindent 8 }}
+        app.kubernetes.io/component: geri
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: geri
+          image: {{ include "grimnir.geri.image" . }}
+          imagePullPolicy: {{ .Values.image.geri.pullPolicy }}
+          ports:
+            - name: udp-csi
+              containerPort: {{ .Values.geri.service.port }}
+              protocol: UDP
+            - name: metrics
+              containerPort: {{ .Values.geri.env.METRICS_PORT | int }}
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grimnir.dbSecretName" . }}
+                  key: {{ .Values.database.secretKey }}
+            - name: UDP_PORT
+              value: {{ .Values.geri.service.port | toString | quote }}
+            {{- range $k, $v := .Values.geri.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- with .Values.geri.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true

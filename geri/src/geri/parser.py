@@ -1,7 +1,7 @@
 """
 parser.py — Binary CSI UDP packet parser.
 
-Mirrors the packet format defined in firmware/receiver/main/main.c
+Mirrors the packet format defined in firmware/muninn/main/main.c
 
 Wire layout (little-endian):
   Offset  Size  Type        Field
@@ -35,17 +35,17 @@ HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 44 bytes
 
 @dataclass(slots=True)
 class CSIPacket:
-    receiver_name: str          # e.g. "rx_ground"
-    transmitter_mac: str        # "aa:bb:cc:dd:ee:ff"
-    rssi: int                   # dBm
-    noise_floor: int            # dBm
+    receiver_name: str  # e.g. "rx_ground"
+    transmitter_mac: str  # "aa:bb:cc:dd:ee:ff"
+    rssi: int  # dBm
+    noise_floor: int  # dBm
     channel: int
     bandwidth_mhz: int
     antenna_count: int
     subcarrier_count: int
-    timestamp_us: int           # device uptime micros (wraps ~71 min)
-    amplitude: list[float]      # length = antenna_count × subcarrier_count
-    phase: list[float]          # length = antenna_count × subcarrier_count
+    timestamp_us: int  # device uptime micros (wraps ~71 min)
+    amplitude: list[float]  # length = antenna_count × subcarrier_count
+    phase: list[float]  # length = antenna_count × subcarrier_count
 
 
 class ParseError(Exception):
@@ -80,8 +80,7 @@ def parse_packet(data: bytes) -> CSIPacket:
     expected_size = HEADER_SIZE + n_values * 4 * 2  # two float32[] arrays
     if len(data) < expected_size:
         raise ParseError(
-            f"Packet too short for {n_values} subcarriers: "
-            f"{len(data)} < {expected_size}"
+            f"Packet too short for {n_values} subcarriers: {len(data)} < {expected_size}"
         )
 
     floats_fmt = f"<{n_values * 2}f"

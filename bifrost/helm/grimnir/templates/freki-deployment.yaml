@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-freki" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: freki
+spec:
+  replicas: {{ .Values.freki.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "grimnir.selectorLabels" (merge (dict "component" "freki") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "grimnir.selectorLabels" (merge (dict "component" "freki") .) | nindent 8 }}
+        app.kubernetes.io/component: freki
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: freki
+          image: {{ include "grimnir.freki.image" . }}
+          imagePullPolicy: {{ .Values.image.freki.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grimnir.dbSecretName" . }}
+                  key: {{ .Values.database.secretKey }}
+            - name: PORT
+              value: {{ .Values.freki.service.port | toString | quote }}
+            {{- range $k, $v := .Values.freki.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- with .Values.freki.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
