@@ -11,10 +11,9 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
+from csi_models import get_session_factory
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from csi_models import get_session_factory
 
 
 async def _get_session() -> AsyncGenerator[AsyncSession, None]:

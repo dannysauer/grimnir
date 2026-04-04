@@ -70,7 +70,7 @@ Some guidelines:
     script early to avoid a more time-consuming rewrite at a later date.
 *   When assessing the complexity of your code (e.g. to decide whether to switch
     languages) consider whether the code is easily maintainable by people other
-    than its author. 
+    than its author.
 
 <a id="s2-shell-files-and-interpreter-invocation"></a>
 
@@ -634,7 +634,7 @@ var="`command \`command1\``"
 <a id="s6.3-tests"></a>
 
 <a id="tests"></a>
-### Test, `[ … ]`, and `[[ … ]]` 
+### Test, `[ … ]`, and `[[ … ]]`
 
 `[[ … ]]` is preferred over `[ … ]`, `test` and `/usr/bin/[`.
 

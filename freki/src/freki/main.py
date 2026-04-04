@@ -21,12 +21,11 @@ import pathlib
 
 import structlog
 import uvicorn
+from csi_models import get_engine, init_engine, run_migrations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
-
-from csi_models import get_engine, init_engine, run_migrations
 
 from .routers import history, labels, stream
 

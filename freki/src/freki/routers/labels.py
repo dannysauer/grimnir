@@ -8,13 +8,12 @@ DELETE /api/labels/{id}          delete a label (also clears backfilled labels)
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import delete, select, text, update
+from datetime import datetime
 
 from csi_models import CsiSample, Label
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, field_validator, model_validator
+from sqlalchemy import select, text, update
 
 from ..db import SessionDep
 
@@ -40,7 +39,7 @@ class LabelCreate(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def end_after_start(self) -> "LabelCreate":
+    def end_after_start(self) -> LabelCreate:
         if self.time_end <= self.time_start:
             raise ValueError("time_end must be after time_start")
         return self
@@ -65,10 +64,7 @@ class LabelOut(BaseModel):
 async def list_labels(session: SessionDep, minutes: int = 120):
     result = await session.execute(
         select(Label)
-        .where(
-            Label.time_end
-            >= text(f"NOW() - INTERVAL '{minutes} minutes'")
-        )
+        .where(Label.time_end >= text(f"NOW() - INTERVAL '{minutes} minutes'"))
         .order_by(Label.time_start.desc())
     )
     return result.scalars().all()

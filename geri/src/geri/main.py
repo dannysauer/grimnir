@@ -23,12 +23,11 @@ import logging
 import os
 import signal
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
-from prometheus_client import start_http_server
-
 from csi_models import init_engine, run_migrations
+from prometheus_client import start_http_server
 
 from .db import get_or_create_receiver_id, insert_batch, upsert_heartbeat
 from .metrics import packets_dropped, packets_invalid, packets_received, receiver_last_seen
@@ -53,9 +52,7 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.JSONRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(
-        getattr(logging, LOG_LEVEL, logging.INFO)
-    ),
+    wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, LOG_LEVEL, logging.INFO)),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
 )
@@ -81,7 +78,7 @@ class CSIUDPProtocol(asyncio.DatagramProtocol):
             return
 
         packets_received.labels(receiver_name=pkt.receiver_name).inc()
-        wall_time = datetime.now(tz=timezone.utc)
+        wall_time = datetime.now(tz=UTC)
         try:
             self._queue.put_nowait((wall_time, addr[0], pkt))
         except asyncio.QueueFull:
@@ -108,10 +105,8 @@ async def batch_writer(queue: asyncio.Queue) -> None:
 
     while True:
         try:
-            wall_time, src_ip, pkt = await asyncio.wait_for(
-                queue.get(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
+            wall_time, src_ip, pkt = await asyncio.wait_for(queue.get(), timeout=timeout)
+        except TimeoutError:
             if batch:
                 await insert_batch(batch)
                 batch = []
@@ -122,9 +117,7 @@ async def batch_writer(queue: asyncio.Queue) -> None:
             return
 
         if pkt.receiver_name not in receiver_cache:
-            receiver_id = await get_or_create_receiver_id(
-                pkt.receiver_name, pkt.transmitter_mac
-            )
+            receiver_id = await get_or_create_receiver_id(pkt.receiver_name, pkt.transmitter_mac)
             receiver_cache[pkt.receiver_name] = receiver_id
         receiver_id = receiver_cache[pkt.receiver_name]
 

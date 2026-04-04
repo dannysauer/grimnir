@@ -52,7 +52,7 @@ xmlns:fn="http://www.w3.org/2005/xpath-functions">
                   var bodyElements = GetElementsByName(bodyName);
                   var linkElement = GetElementsByName('link-' + buttonName)[0];
                   if (bodyElements.length != 1) {
-                    throw Error('ShowHideByName() got the wrong number of bodyElements:  ' + 
+                    throw Error('ShowHideByName() got the wrong number of bodyElements:  ' +
                         bodyElements.length);
                   } else {
                     var bodyElement = bodyElements[0];
@@ -140,10 +140,10 @@ xmlns:fn="http://www.w3.org/2005/xpath-functions">
                   var showHideAllValue = showHideAllRegex.exec(window.location.href);
                   if (showHideAllValue != null) {
                     if (showHideAllValue[2] == "y") {
-                      SetHiddenState(document.getElementsByTagName("body")[0].childNodes, 
+                      SetHiddenState(document.getElementsByTagName("body")[0].childNodes,
                           "inline", '<xsl:value-of select="$hide_button_text"/>');
                     } else {
-                      SetHiddenState(document.getElementsByTagName("body")[0].childNodes, 
+                      SetHiddenState(document.getElementsByTagName("body")[0].childNodes,
                           "none", '<xsl:value-of select="$show_button_text"/>');
                     }
                   }
@@ -175,4 +175,3 @@ xmlns:fn="http://www.w3.org/2005/xpath-functions">
   </xsl:template>
 
 </xsl:stylesheet>
-

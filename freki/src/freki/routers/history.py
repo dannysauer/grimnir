@@ -16,10 +16,9 @@ GET /api/history/receivers
 
 from __future__ import annotations
 
+from csi_models import CsiSample, Receiver, ReceiverHeartbeat
 from fastapi import APIRouter, Query
 from sqlalchemy import select, text
-
-from csi_models import CsiSample, Receiver, ReceiverHeartbeat
 
 from ..db import SessionDep
 

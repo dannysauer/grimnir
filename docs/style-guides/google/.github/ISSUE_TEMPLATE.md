@@ -8,4 +8,4 @@ proposed, discussed, and approved on the internal forums first.
 
 If an issue points out a simple mistake — a typo, a broken link, etc. —
 then a correction might be made. However there is no commitment to do
-so. Issues are normally closed without comment. 
+so. Issues are normally closed without comment.

@@ -6,7 +6,7 @@
     Revision 1.1
   </p>
 
-  
+
   <address>
     Nate Soares<br/>
     Artemis Sparks<br/>
@@ -116,8 +116,8 @@
   </CATEGORY>
 
   <CATEGORY title="General Guidelines">
-    
-    
+
+
     <STYLEPOINT title="Messaging">
       <SUMMARY>Message the user infrequently.</SUMMARY>
       <BODY>
@@ -301,7 +301,7 @@
     <STYLEPOINT title="Whitespace">
       <SUMMARY>
         Similar to python.
-        
+
         <br/>
         <br/>
       </SUMMARY>
@@ -355,7 +355,7 @@
       <BODY>
         <SUBSECTION title="plugin-names-like-this">
           <p>Keep them short and sweet.</p>
-          
+
         </SUBSECTION>
         <SUBSECTION title="FunctionNamesLikeThis">
           <p>Prefix script-local functions with <code>s:</code></p>
@@ -403,7 +403,7 @@
     Revision 1.1
   </p>
 
-  
+
   <address>
     Nate Soares<br/>
     Artemis Sparks<br/>

@@ -8,13 +8,12 @@ main.py after migrations have run.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from csi_models import CsiSample, Receiver, ReceiverHeartbeat, get_session_factory
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .metrics import batch_size, batch_write_duration, batch_writes
 from .parser import CSIPacket
@@ -29,9 +28,7 @@ async def get_or_create_receiver_id(name: str, mac: str) -> int:
     """
     session_factory = get_session_factory()
     async with session_factory() as session:
-        result = await session.execute(
-            select(Receiver.id).where(Receiver.name == name)
-        )
+        result = await session.execute(select(Receiver.id).where(Receiver.name == name))
         row = result.scalar_one_or_none()
         if row is not None:
             return row
@@ -101,13 +98,13 @@ async def upsert_heartbeat(
             pg_insert(ReceiverHeartbeat)
             .values(
                 receiver_id=receiver_id,
-                last_seen=datetime.now(tz=timezone.utc),
+                last_seen=datetime.now(tz=UTC),
                 ip_address=ip_address,
             )
             .on_conflict_do_update(
                 index_elements=["receiver_id"],
                 set_={
-                    "last_seen": datetime.now(tz=timezone.utc),
+                    "last_seen": datetime.now(tz=UTC),
                     "ip_address": ip_address,
                 },
             )

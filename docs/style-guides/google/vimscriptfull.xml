@@ -6,7 +6,7 @@
     Revision 1.1
   </p>
 
-  
+
   <address>
     Nate Soares<br/>
     Artemis Sparks<br/>
@@ -25,7 +25,7 @@
         It provides an idealized set of rules that are rather too draconian to
         push on casual scripters.
       </p>
-      
+
       <p>
         It's for users who want to know why certain decisions were made in the
         abbreviated guide and who want to learn a thing or two about using
@@ -180,16 +180,16 @@
     <p>
       In general, guard all commands and functions against user settings.
     </p>
-    
+
   </CATEGORY>
   <CATEGORY title="Language Guide">
     <ul>
-      
-      
+
+
       <li>
         Line continuations: <strong>Yes</strong>
         <ul>
-          
+
           <li>
             Plugins that support vi compatibility mode must save and restore
             compatibility options as described in the
@@ -294,7 +294,7 @@
       <li>
         Python: <strong>Sparingly</strong>
         <ul>
-          
+
           <li>
             Hurts code reuse since python code embedded in python plugins is
             awkward to share between plugins.
@@ -375,8 +375,8 @@
           <li>
             Plugin names should be descriptive and concise.
           </li>
-          
-          
+
+
         </ul>
       </li>
       <li>
@@ -490,7 +490,7 @@
           <li>
             Use maktaba flags for plugin configuration. Users can configure them
             using the <code>:Glaive</code> command.
-            
+
           </li>
           <li>
             Check if configuration variables exist before setting them.
@@ -510,7 +510,7 @@
       in doubt.
     </p>
 
-    
+
 
     <STYLEPOINT title="Documentation">
       <SUMMARY>
@@ -1474,7 +1474,7 @@
 
   </CATEGORY>
   <CATEGORY title="Recommended Shortcuts">
-    
+
     <p>
       Use the following shortcuts:
     </p>
@@ -1493,7 +1493,7 @@
     <p>
       This section plumbs some of the darker corners of vimscript, explaining
       the language pathologies that you wish you didn't have to know.
-      
+
     </p>
 
     <STYLEPOINT title="Compatibility Mode">
@@ -1525,7 +1525,7 @@
     Revision 1.1
   </p>
 
-  
+
   <address>
     Nate Soares<br/>
     Artemis Sparks<br/>

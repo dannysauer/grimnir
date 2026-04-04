@@ -25,11 +25,11 @@ environment.</p>
 <p>There is no automatic deployment process for this version as it's pushed
 on-demand by volunteers.</p>
 
-</section> 
+</section>
 
 <h2 id="introduction" class="numbered">Introduction</h2>
 
- 
+
 
 <h3 id="terminology-notes" class="numbered">Terminology notes</h3>
 
@@ -46,13 +46,13 @@ normative language of the style guide. That is, while the examples are in Google
 Style, they may not illustrate the <em>only</em> stylish way to represent the code.
 Optional formatting choices made in examples must not be enforced as rules.</p>
 
- 
+
 
 <h2 id="source-file-basics" class="numbered">Source file basics</h2>
 
- 
 
- 
+
+
 
 <p><a id="file-encoding"></a></p>
 
@@ -96,17 +96,17 @@ const units = '\u03bcs'; // Greek letter mu, 's'
 const output = '\ufeff' + content;
 </code></pre>
 
- 
 
- 
 
- 
 
- 
 
- 
 
- 
+
+
+
+
+
+
 
 <p><a id="modules"></a>
 <a id="source-organization"></a></p>
@@ -124,11 +124,11 @@ const output = '\ufeff' + content;
 
 <p><strong>Exactly one blank line</strong> separates each section that is present.</p>
 
- 
+
 
 <h3 id="file-copyright" class="numbered">Copyright information</h3>
 
- 
+
 
 <p>If license or copyright information is necessary in a file, add it in a JSDoc at
 the top of the file. </p>
@@ -150,13 +150,13 @@ dependencies. Wrapped lines are not indented.</p>
  */
 </code></pre>
 
- 
+
 
 <h3 id="imports" class="numbered">Imports</h3>
 
 <p>There are four variants of import statements in ES6 and TypeScript:</p>
 
- 
+
 
 <section>
 
@@ -229,7 +229,7 @@ import 'jasmine';
 import '@polymer/paper-button';
 </code></pre>
 
-</section> 
+</section>
 
 <h4 id="import-paths" class="numbered">Import paths</h4>
 
@@ -250,7 +250,7 @@ import {Symbol2} from '../parent/file';
 import {Symbol3} from './sibling';
 </code></pre>
 
- 
+
 
 <p><a id="module-versus-destructuring-import"></a></p>
 
@@ -322,7 +322,7 @@ import {Foo, Bar} from './foo.proto';
 function copyFooBar(foo: Foo, bar: Bar) {...}
 </code></pre>
 
- 
+
 
 <h4 id="renaming-imports" class="numbered">Renaming imports</h4>
 
@@ -340,11 +340,11 @@ improve code clarity. For example, when using RxJS the <code>from</code> functio
 be more readable when renamed to <code>observableFrom</code>.</li>
 </ol>
 
- 
 
- 
 
- 
+
+
+
 
 <h3 id="exports" class="numbered">Exports</h3>
 
@@ -416,7 +416,7 @@ export class Foo {
 }
 </code></pre>
 
-</section> 
+</section>
 
 <h4 id="export-visibility" class="numbered">Export visibility</h4>
 
@@ -424,11 +424,11 @@ export class Foo {
 Only export symbols that are used outside of the module. Generally minimize the
 exported API surface of modules.</p>
 
- 
+
 
 <h4 id="mutable-exports" class="numbered">Mutable exports</h4>
 
- 
+
 
 <p>Regardless of technical support, mutable exports can create hard to understand
 and debug code, in particular with re-exports across multiple modules. One way
@@ -444,7 +444,7 @@ window.setTimeout(() =&gt; {
 }, 1000 /* ms */);
 </code></pre>
 
-</section> 
+</section>
 
 <p>If one needs to support externally accessible and mutable bindings, they
 <em>should</em> instead use explicit getter functions.</p>
@@ -487,7 +487,7 @@ of namespacing.</p>
 export function bar() { return 1; }
 </code></pre>
 
- 
+
 
 <h3 id="import-export-type" class="numbered">Import and export type</h3>
 
@@ -522,7 +522,7 @@ and ensures <code>import type</code> is used correctly.</li>
 <p>Note: If you need to force a runtime load for side effects, use <code>import '...';</code>.
 See </p>
 
-</section> 
+</section>
 
 <h4 id="export-type" class="numbered">Export type</h4>
 
@@ -546,7 +546,7 @@ vs value usages of an API is to actually split the symbols into e.g.
 <code>UserService</code> and <code>AjaxUserService</code>. This is less error prone and also better
 communicates intent.</p>
 
-</section> 
+</section>
 
 <p><a id="namespaces-vs-modules"></a></p>
 
@@ -561,7 +561,7 @@ the form <code>import {foo} from 'bar';</code></p>
 <em>may</em> only be used when required to interface with external, third party code.
 To semantically namespace your code, use separate files.</p>
 
- 
+
 
 <p>Code <em>must not</em> use <code>require</code> (as in <code>import x = require('...');</code>) for imports.
 Use ES6 module syntax.</p>
@@ -578,7 +578,7 @@ namespace Rocket {
 import x = require('mydep');
 </code></pre>
 
- 
+
 
 <blockquote>
 <p>NB: TypeScript <code>namespace</code>s used to be called internal modules and used to use
@@ -661,7 +661,7 @@ c.length = 2;
 Array.from&lt;number&gt;({length: 5}).fill(0);
 </code></pre>
 
- 
+
 
 <p><a id="features-arrays-non-numeric-properties"></a></p>
 
@@ -743,7 +743,7 @@ default values on the left hand side:</p>
 prefer object destructuring to array destructuring when possible, as it allows
 naming the individual elements and specifying a different type for each.</p>
 
- 
+
 
 <p><a id="features-object-literals"></a></p>
 
@@ -839,7 +839,7 @@ keys) unless the computed property is a
 <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol">symbol</a>
 (e.g. <code>[Symbol.iterator]</code>).</p>
 
- 
+
 
 <p><a id="features-objects-destructuring"></a></p>
 
@@ -875,9 +875,9 @@ function destructured({num, str = 'default'}: Options = {}) {}
 function nontrivialDefault({num, str}: Options = {num: 42, str: 'default'}) {}
 </code></pre>
 
- 
 
- 
+
+
 
 <p><a id="formatting-class-literals"></a>
 <a id="features-classes"></a></p>
@@ -1062,7 +1062,7 @@ they can be overridden - this feature is not commonly used.</p>
 <p>This code also encourages an anti-pattern of having substantial static state,
 which causes problems with testability.</p>
 
-</section> 
+</section>
 
 <p><a id="disallowed-features-omitting-parents-with-new"></a>
 <a id="features-classes-constructors"></a></p>
@@ -1169,7 +1169,7 @@ before ES2015. They can only be downleveled to ES2015, not lower. At the same
 time, they do not offer substantial benefits when static type checking is used
 to enforce visibility.</p>
 
-</section> 
+</section>
 
 <h5 id="use-readonly" class="numbered">Use readonly</h5>
 
@@ -1251,13 +1251,13 @@ manages to bypass the visibility restriction.</p>
 compiler, this pattern can be broken by rearranging the build rules, and also
 violates <a href="#optimization-compatibility">optimization compatibility</a>.</p>
 
-</section> 
+</section>
 
 <p><a id="features-classes-getters-and-setters"></a></p>
 
 <h5 id="classes-getters-and-setters" class="numbered">Getters and setters</h5>
 
- 
+
 
 <p>Getters and setters, also known as accessors, for class members <em>may</em> be used.
 The getter method <em>must</em> be a
@@ -1338,7 +1338,7 @@ iterable. Beyond this, <code>Symbol</code> should be used sparingly.</p>
 <code>Symbol.isConcatSpreadable</code>) as they are not polyfilled by the compiler and will
 therefore not work in older browsers.</p>
 
- 
+
 
 <h4 id="visibility" class="numbered">Visibility</h4>
 
@@ -1385,9 +1385,9 @@ objects are explicitly forbidden.</p>
 <p><strong>Exception</strong>: Framework code (such as Polymer, or Angular) may need to use <code>prototype</code>s, and should not resort
 to even-worse workarounds to avoid doing so.</p>
 
- 
 
- 
+
+
 
 <p><a id="features-functions"></a></p>
 
@@ -1434,9 +1434,9 @@ required.</p>
 const fooSearch: SearchFunction = (source, subString) =&gt; { ... };
 </code></pre>
 
- 
 
- 
+
+
 
 <p><a id="features-functions-nested-functions"></a></p>
 
@@ -1707,7 +1707,7 @@ class Foo {
 there are more than a small handful of optional parameters that do not have a
 natural order.</p>
 
- 
+
 
 <p><a id="features-functions-rest-parameters"></a>
 <a id="features-functions-spread-operator"></a></p>
@@ -1720,7 +1720,7 @@ variable or parameter <code>arguments</code>, which confusingly shadows the buil
 <pre><code class="language-ts good">function variadic(array: string[], ...numbers: number[]) {}
 </code></pre>
 
- 
+
 
 <p>Use function spread syntax instead of <code>Function.prototype.apply</code>.</p>
 
@@ -1760,9 +1760,9 @@ target of an event, or unnecessarily <code>call()</code>ed or <code>apply()</cod
 
 <h3 id="interfaces" class="numbered">Interfaces</h3>
 
- 
 
- 
+
+
 
 <h3 id="primitive-literals" class="numbered">Primitive literals</h3>
 
@@ -1893,7 +1893,7 @@ while the others are truthy, which is likely to be unexpected. Readers of code
 that uses an enum value may not even know whether it's the first declared value
 or not.</p>
 
-</section> 
+</section>
 
 <p>Using string concatenation to cast to string is discouraged, as we check that
 operands to the plus operator are of matching types.</p>
@@ -1911,7 +1911,7 @@ cases may require special handling.</p>
 if (!isFinite(aNumber)) throw new Error(...);
 </code></pre>
 
- 
+
 
 <p>Code <em>must not</em> use unary plus (<code>+</code>) to coerce strings to numbers. Parsing
 numbers can fail, has surprising corner cases, and can be a code smell (parsing
@@ -2127,7 +2127,7 @@ memorized.</p>
 <p>Do not use unnecessary parentheses around the entire expression following
 <code>delete</code>, <code>typeof</code>, <code>void</code>, <code>return</code>, <code>throw</code>, <code>case</code>, <code>in</code>, <code>of</code>, or <code>yield</code>.</p>
 
- 
+
 
 <p><a id="exceptions"></a>
 <a id="features-exceptions"></a></p>
@@ -2191,7 +2191,7 @@ Promise.reject(new Error('oh noes!'));
 <p>When catching errors, code <em>should</em> assume that all thrown errors are instances
 of <code>Error</code>.</p>
 
- 
+
 
 <section>
 
@@ -2211,7 +2211,7 @@ try {
 }
 </code></pre>
 
-</section> 
+</section>
 
 <p>Exception handlers <em>must not</em> defensively handle non-<code>Error</code> types unless the
 called API is conclusively known to throw non-<code>Error</code>s in violation of the above
@@ -2235,7 +2235,7 @@ the non-<code>Error</code>s originate.</p>
 Repeating the same defenses against a problem that will not exist in most code
 leads to boiler-plate code that is not useful.</p>
 
-</section> 
+</section>
 
 <p><a id="features-empty-catch-blocks"></a></p>
 
@@ -2306,7 +2306,7 @@ groups (<code>case ...</code>) <em>must not</em> fall through (enforced by the c
 }
 </code></pre>
 
- 
+
 
 <p><a id="features-equality-checks"></a>
 <a id="features-equality-checks-exceptions"></a></p>
@@ -2497,7 +2497,7 @@ frameworks:</p>
 <li>Polymer (e.g. <code>@property</code>)</li>
 </ul>
 
- 
+
 
 <section>
 
@@ -2507,7 +2507,7 @@ frameworks:</p>
 that have since diverged from the TC39 proposal and have known bugs that won't
 be fixed.</p>
 
-</section> 
+</section>
 
 <p>When using decorators, the decorator <em>must</em> immediately precede the symbol it
 decorates, with no empty lines between:</p>
@@ -2563,7 +2563,7 @@ clang-format).</p>
 feature related to optimization that makes the enum invisible to
 JavaScript users of the module.</p>
 
-</section> 
+</section>
 
 <h4 id="debugger-statements" class="numbered">Debugger statements</h4>
 
@@ -2779,7 +2779,7 @@ module alias</td>
 <p>Type parameters, like in <code>Array&lt;T&gt;</code>, <em>may</em> use a single upper case character
 (<code>T</code>) or <code>UpperCamelCase</code>.</p>
 
- 
+
 
 <h4 id="identifiers-test-names" class="numbered">Test names</h4>
 
@@ -2802,7 +2802,7 @@ in-between elements:</p>
 </code></pre>
 </blockquote>
 
- 
+
 
 <h4 id="identifiers-imports" class="numbered">Imports</h4>
 
@@ -2857,9 +2857,9 @@ in a function) then it <em>must</em> use <code>lowerCamelCase</code>.</p>
 <p>If a value is an arrow function that implements an interface, then it <em>may</em> be
 declared <code>lowerCamelCase</code>.</p>
 
- 
 
- 
+
+
 
 <p><a id="naming-local-aliases"></a></p>
 
@@ -2927,7 +2927,7 @@ const value: string[] = await rpc.getSomeValue().transform();
 
 <p>Whether an annotation is required is decided by the code reviewer.</p>
 
- 
+
 
 <h4 id="return-types" class="numbered">Return types</h4>
 
@@ -2953,7 +2953,7 @@ that change the return type of the function.</li>
 constructed as a union type (<code>string|null</code>); similarly with <code>undefined</code>. There
 is no special syntax for unions of <code>undefined</code> and <code>null</code>.</p>
 
- 
+
 
 <p>TypeScript code can use either <code>undefined</code> or <code>null</code> to denote absence of a
 value, there is no general guidance to prefer one over the other. Many
@@ -3117,7 +3117,7 @@ makeSound(dog);
 makeSound(horse);
 </code></pre>
 
-</section> 
+</section>
 
 <p><a id="interfaces-vs-type-aliases"></a></p>
 
@@ -3155,7 +3155,7 @@ That page quotes the TypeScript team lead: <q>Honestly, my take is that it shoul
 really just be interfaces for anything that they can model. There is no benefit
 to type aliases when there are so many issues around display/perf.</q></p>
 
-</section> 
+</section>
 
 <h3 id="arrayt-type" class="numbered"><code>Array&lt;T&gt;</code> Type</h3>
 
@@ -3315,14 +3315,14 @@ dereferencing all properties. As such, <code>any</code> is dangerous - it can ma
 programming errors, and its use undermines the value of having static types in
 the first place.</p>
 
- 
+
 
 <section>
 
 <p><strong>Consider <em>not</em> to use <code>any</code>.</strong> In circumstances where you want to use <code>any</code>,
 consider one of:</p>
 
-</section> 
+</section>
 
 <ul>
 <li><a href="#any-specific">Provide a more specific type</a></li>
@@ -3381,9 +3381,9 @@ danger.whoops();  // This access is completely unchecked!
 <p>To safely use <code>unknown</code> values, narrow the type using a
 <a href="https://www.typescriptlang.org/docs/handbook/advanced-types.html#type-guards-and-differentiating-types">type guard</a></p>
 
-</section> 
+</section>
 
- 
+
 
 <h4 id="any-suppress" class="numbered">Suppressing <code>any</code> lint warnings</h4>
 
@@ -3401,7 +3401,7 @@ const mockBookService = ({get() { return mockBook; }} as any) as BookService;
 const component = new MyComponent(mockBookService, /* unused ShoppingCart */ null as any);
 </code></pre>
 
- 
+
 
 <h3 id="empty-interface-type" class="numbered"><code>{}</code> Type</h3>
 
@@ -3504,7 +3504,7 @@ three mentioned above, plus <code>symbol</code> and <code>bigint</code>).</li>
 existing APIs that have return type only generics always explicitly specify the
 generics.</p>
 
- 
+
 
 <p><a id="appendices-style-related-tools"></a></p>
 
@@ -3531,7 +3531,7 @@ generics.</p>
 <a id="formatting-vertical-whitespace"></a>
 <a id="formatting-whitespace"></a></p>
 
- 
+
 
 <h3 id="typescript-compiler" class="numbered">TypeScript compiler</h3>
 
@@ -3554,9 +3554,9 @@ be fixed more directly.</p>
 hard to predict what types the surrounding code will end up seeing. For many
 type errors, the advice in <a href="#any">how to best use <code>any</code></a> is useful.</p>
 
-</section> 
+</section>
 
- 
+
 
 <p>You may use <code>@ts-expect-error</code> in unit tests, though you generally <em>should not</em>.
 <code>@ts-expect-error</code> suppresses all errors. It's easy to accidentally over-match
@@ -3570,9 +3570,9 @@ limits error suppression to a single expression.</li>
 <a href="#any-suppress">suppressing <code>any</code> lint warnings</a>.</li>
 </ul>
 
- 
 
- 
+
+
 
 <h3 id="conformance" class="numbered">Conformance</h3>
 
@@ -3581,7 +3581,7 @@ limits error suppression to a single expression.</li>
 <a href="https://tsetse.info">tsetse</a> and
 <a href="https://github.com/google/tsec">tsec</a>.</p>
 
- 
+
 
 <p>These rules are commonly used to enforce critical restrictions (such as defining
 globals, which could break the codebase) and security patterns (such as using
@@ -3590,16 +3590,16 @@ globals, which could break the codebase) and security patterns (such as using
 <p>Google-style TypeScript must abide by any applicable global or framework-local
 conformance rules.</p>
 
- 
 
- 
+
+
 
 <p><a id="jsdoc"></a>
 <a id="formatting-comments"></a></p>
 
 <h2 id="comments-documentation" class="numbered">Comments and documentation</h2>
 
- 
+
 
 <h4 id="jsdoc-vs-comments" class="numbered">JSDoc versus comments</h4>
 
@@ -3639,7 +3639,7 @@ generators), while ordinary comments are only for other humans.</p>
 
 <p>Comments are not enclosed in boxes drawn with asterisks or other characters.</p>
 
- 
+
 
 <h3 id="jsdoc-general-form" class="numbered">JSDoc general form</h3>
 
@@ -3716,7 +3716,7 @@ function add(left: number, right: number) { ... }
 function add(left: number, right: number) { ... }
 </code></pre>
 
- 
+
 
 <h3 id="jsdoc-line-wrapping" class="numbered">Line wrapping</h3>
 
@@ -3755,7 +3755,7 @@ know how and when to use the class, as well as any additional considerations
 necessary to correctly use the class. Textual descriptions may be omitted on the
 constructor.</p>
 
- 
+
 
 <h3 id="method-and-function-comments" class="numbered">Method and function comments</h3>
 
@@ -3781,7 +3781,7 @@ constructor.</p>
 <p>To document these fields, use JSDoc's <code>@param</code> annotation. Editors display the
 description on constructor calls and property accesses.</p>
 
- 
+
 
 <pre><code class="language-ts good">/** This class demonstrates how parameter properties are documented. */
 class ParamProps {
@@ -3816,7 +3816,7 @@ types in <code>@param</code> or <code>@return</code> blocks, do not write <code>
 <code>@private</code>, <code>@override</code> etc. on code that uses the <code>implements</code>, <code>enum</code>,
 <code>private</code>, <code>override</code> etc. keywords.</p>
 
- 
+
 
 <h3 id="redundant-comments" class="numbered">Make comments that actually add information</h3>
 
@@ -3892,7 +3892,7 @@ export class FooComponent {}
 </code></pre></li>
 </ul>
 
- 
+
 
 <h2 id="policies" class="numbered">Policies</h2>
 
@@ -3937,9 +3937,9 @@ CL. If you find yourself making a lot of style changes that aren’t critical
 to the central focus of a CL, promote those changes to a separate CL.</li>
 </ol>
 
- 
 
- 
+
+
 
 <p><a id="policies-deprecation"></a></p>
 
@@ -3949,7 +3949,7 @@ to the central focus of a CL, promote those changes to a separate CL.</li>
 annotation. A deprecation comment must include simple, clear directions for
 people to fix their call sites.</p>
 
- 
+
 
 <p><a id="policies-generated-code-mostly-exempt"></a></p>
 
@@ -3961,7 +3961,7 @@ hand-written source code must follow the naming requirements. As a special
 exception, such identifiers are allowed to contain underscores, which may help
 to avoid conflicts with hand-written identifiers.</p>
 
- 
+
 
 <p><a id="goals"></a></p>
 
@@ -4025,7 +4025,7 @@ the language or if it avoids a bug that is unlikely to occur -- it's
 probably worth leaving out.</p></li>
 </ol>
 
- 
+
 
 <p><a id="appendices-legacy-exceptions"></a>
 <a id="appendices-legacy-exceptions-declareLegacyNamespace"></a>

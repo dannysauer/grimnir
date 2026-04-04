@@ -67,7 +67,7 @@ Robert Brown
     on how to improve our guide, and
     on what alternate styles work for you and why.
   </p>
-  
+
   <p>
     This guide is not a Common Lisp tutorial.
     For basic information about the language, please consult
@@ -162,7 +162,7 @@ Robert Brown
       <p>
         Permission comes from the owners of your project.
       </p>
-      
+
       <p>
         Forgiveness is requested in a comment
         near the point of guideline violation,
@@ -170,7 +170,7 @@ Robert Brown
         The original comment should be signed by you, and
         the reviewer should add a signed approval to the comment at review time.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Conventions">
@@ -202,7 +202,7 @@ Robert Brown
       <p>
         Conventional guidelines <em>are</em> indoctrination.
         Their purpose is to make you follow the mores of the community,
-        
+
         so you can more effectively cooperate with existing members.
         It is still useful to distinguish the parts that are technically motivated
         from the parts that are mere conventions,
@@ -457,7 +457,7 @@ Robert Brown
           Be aware of these issues, or consult with people who are.
         </li>
       </ul>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Open-Sourcing Code">
@@ -469,7 +469,7 @@ Robert Brown
         separate from your main project and then
         have your project import it like any other open-source library.
       </p>
-      
+
     </SUMMARY>
     <BODY>
       <p>
@@ -478,7 +478,7 @@ Robert Brown
         and open-source the general-purpose parts,
         while keeping the business-specific parts a trade secret.
       </p>
-      
+
       <p>
         Open-Sourcing code has many advantages,
         including being able to leverage third parties for development,
@@ -490,7 +490,7 @@ Robert Brown
         even of code that (at least initially)
         is not directly usable by third parties.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Development Process">
@@ -642,7 +642,7 @@ Robert Brown
           Use "referer", not "referrer", in the context of the HTTP protocol.
         </li>
       </ul>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Line length">
@@ -657,7 +657,7 @@ Robert Brown
         since good style encourages the use of
         descriptive variables and function names.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Indentation">
@@ -695,8 +695,8 @@ Robert Brown
         <a HREF="https://www.gnu.org/software/emacs/manual/html_node/emacs/Hooks.html">hook</a> to 'lisp-mode-hook that calls common-lisp-set-style to set
         the appropriate style automatically.
       </p>
-      
-      
+
+
       <p>
         Use indentation to make complex function applications easier to read.
         When an application does not fit on one line
@@ -759,14 +759,14 @@ Robert Brown
         Indeed, whoever was the main author at the time such a mention was included
         might not be who eventually made the most significant contributions to the file,
         and even less who is responsible for the file at the moment.
-        
+
       </p>
       <p>
         You should not include copyright information in individual source code files.
         An exception is made for files meant to be disseminated as standalone.
       </p>
-      
-      
+
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Vertical white space">
@@ -1127,16 +1127,16 @@ Robert Brown
       <p>
         The comments begin with <code>TODO</code> in all capital letters,
         followed by the
-        
+
         name, e-mail address, or other identifier
-        of the person 
+        of the person
         with the best context about the problem referenced by the <code>TODO</code>.
         The main purpose is to have a consistent <code>TODO</code> that
         can be searched to find out how to get more details upon
         request. A <code>TODO</code> is not a commitment that the
         person referenced will fix the problem. Thus when you create
         a <code>TODO</code>,
-        it is almost always your 
+        it is almost always your
         name
         that is given.
       </p>
@@ -1145,7 +1145,7 @@ Robert Brown
         you should use your username (for code within the company)
         or full email address (for code visible outside the company),
         not just initials.
-        
+
       </p>
       <CODE_SNIPPET>
         ;;--- TODO(george@gmail.com): Refactor to provide a better API.
@@ -1687,7 +1687,7 @@ Robert Brown
         You should use suitable infrastructure
         to automate the appropriate declaration of such variables.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Assignment">
@@ -1804,12 +1804,12 @@ Robert Brown
         <li>
           Complex bug-checks may need to use <code>ERROR</code>
           instead of <code>ASSERT</code>.
-          
+
         </li>
         <li>
           When writing a server, you must not call <code>WARN</code>.
           Instead, you should use the appropriate logging framework.
-          
+
         </li>
         <li>
           Code must not call <code>SIGNAL</code>.
@@ -1824,7 +1824,7 @@ Robert Brown
           e.g. type <code>T</code>, or use <code>IGNORE-ERRORS</code>.
           Instead, let unknown conditions propagate to
           the standard ultimate handler for processing.
-          
+
         </li>
         <li>
           There are a few places where handling all conditions is appropriate,
@@ -1882,7 +1882,7 @@ Robert Brown
       in order to enable compile-time and run-time sanity-checking.
     </SUMMARY>
     <BODY>
-      
+
       <p>
         If your function is using a special variable as an implicit argument,
         it's good to put in a <code>CHECK-TYPE</code> for the special variable,
@@ -1891,7 +1891,7 @@ Robert Brown
         that this variable is being used implicitly as an argument,
         and also to help detect bugs.
       </p>
-      
+
       <p>
         Using <code>(declare (type ...))</code>
         is the least-desirable mechanism to use
@@ -1960,7 +1960,7 @@ Robert Brown
         Otherwise, you should use accessors,
         <code>WITH-ACCESSORS</code>
       </p>
-      
+
       <p>
         Accessor names generally follow a convention of
         <code>&lt;protocol-name&gt;-&lt;slot-name&gt;</code>,
@@ -2081,7 +2081,7 @@ Robert Brown
         it would disable error checking for misspelled or wrong keywords
         in <code>MAKE-INSTANCE</code> calls!
       </p>
-      
+
       <p>
         A typical <code>PRINT-OBJECT</code> method might look like this:
       </p>
@@ -2184,7 +2184,7 @@ Robert Brown
         and
         <code>(declaim (inline foo))</code>.
       </p>
-      
+
       <p>
         You can also use a compiler-macro
         as a way to speed up function execution
@@ -2258,7 +2258,7 @@ Robert Brown
       <p>
         Any functions (closures) created by the macro should be named,
         which can be done using <code>FLET</code>.
-        
+
         This also allows you to declare the function to be of dynamic extent
         (if it is — and often it is; yet see below regarding
         <a href="#DYNAMIC-EXTENT">DYNAMIC-EXTENT</a>).
@@ -2532,7 +2532,7 @@ Robert Brown
         <code>ALEXANDRIA:FORMAT-SYMBOL</code>
         to create the symbols you need.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
 </CATEGORY>
@@ -2591,7 +2591,7 @@ Robert Brown
         one for the value that is known if any,
         and one to denote whether the value was known or found.
       </p>
-      
+
       <p>
         When working with database classes, keep in mind that
         <code>NIL</code> need not always map to <code>'NULL'</code>
@@ -2811,10 +2811,10 @@ Robert Brown
         (defconstant +google-url+ "https://www.google.com/")
         (defconstant +valid-colors+ '(red green blue))
       </BAD_CODE_SNIPPET>
-      
-      
-      
-      
+
+
+
+
       <p>
         Open-Source libraries may use
         <code>ALEXANDRIA:DEFINE-CONSTANT</code>
@@ -2923,7 +2923,7 @@ Robert Brown
         with 10 or more levels of nesting.
         Use your judgment and consult your reviewers.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Conditional Expressions">
@@ -3137,7 +3137,7 @@ Robert Brown
         <a href="#Using_Libraries">Using Libraries</a> and
         <a href="#Open-Sourcing_Code">Open-Sourcing Code</a>.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Iteration">
@@ -3312,7 +3312,7 @@ Robert Brown
         is incorrect in case of overflow, and can
         have undefined behavior when called with anything but fixnums.
       </p>
-      
+
       <p>
         More generally, unsafe operations
         will yield the correct result faster
@@ -3365,7 +3365,7 @@ Robert Brown
         but is not to be used for production code since
         it defeats the purpose of declarations as a performance trick.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="DYNAMIC-EXTENT">
@@ -3538,7 +3538,7 @@ Robert Brown
         without burdening users with implementation details.
         See for instance <code>UIOP:REDUCE/STRCAT</code>.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="Avoid NCONC">
@@ -3642,7 +3642,7 @@ Robert Brown
         Unlike the case of <code>#'symbol</code> vs <code>'symbol</code>,
         it is only a syntactic difference with no semantic impact,
         except that the former works on Genera and the latter doesn't.
-        
+
         You must use the former style if your code is intended as a library
         with maximal compatibility to all Common Lisp implementations;
         otherwise, it is optional which style you use.
@@ -3737,7 +3737,7 @@ Robert Brown
         the underlying <code>UIOP:SUBPATHNAME</code> and
         <code>UIOP:PARSE-UNIX-NAMESTRING</code>.
       </p>
-      
+
       <p>
         Finally, be aware that paths may change between
         the time you build the Lisp image for your application,
@@ -3751,7 +3751,7 @@ Robert Brown
         to call functions before an image is dumped,
         from which to reset or <code>makunbound</code> relevant variables.
       </p>
-      
+
     </BODY>
   </STYLEPOINT>
   <STYLEPOINT title="SATISFIES">
