@@ -39,7 +39,7 @@ async def _fetch_snapshot() -> dict:
         result = await session.execute(
             select(Receiver, ReceiverHeartbeat)
             .outerjoin(ReceiverHeartbeat, Receiver.id == ReceiverHeartbeat.receiver_id)
-            .where(Receiver.active == True)
+            .where(Receiver.active.is_(True))
             .order_by(Receiver.id)
         )
         rows = result.all()

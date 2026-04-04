@@ -80,7 +80,7 @@ def parse_packet(data: bytes) -> CSIPacket:
     expected_size = HEADER_SIZE + n_values * 4 * 2  # two float32[] arrays
     if len(data) < expected_size:
         raise ParseError(
-            f"Packet too short for {n_values} subcarriers: " f"{len(data)} < {expected_size}"
+            f"Packet too short for {n_values} subcarriers: {len(data)} < {expected_size}"
         )
 
     floats_fmt = f"<{n_values * 2}f"
