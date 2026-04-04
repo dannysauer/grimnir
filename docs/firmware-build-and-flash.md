@@ -147,6 +147,26 @@ The serial port is typically `COM3`, `COM4`, etc. — check Device Manager if
 
 ---
 
+## PlatformIO
+
+PlatformIO is **not recommended** for this project. While it can build ESP-IDF projects
+(using `framework = espidf` in `platformio.ini`), there are practical downsides:
+
+- PlatformIO packages ESP-IDF as a versioned platform dependency and lags behind upstream
+  releases. The CSI capture APIs changed in ESP-IDF v5.x; an outdated bundled version
+  can cause subtle breakage without a clear error.
+- The ESP-IDF Arduino framework (PlatformIO's typical default) does **not** expose the
+  `esp_wifi_set_csi_config` / `esp_wifi_set_csi_rx_cb` APIs that Muninn requires.
+  You must explicitly specify `framework = espidf` — which means you are essentially
+  using raw ESP-IDF anyway, without PlatformIO's main benefit (library management).
+- The firmware has no external library dependencies, so PlatformIO's component registry
+  adds nothing here.
+
+The official **ESP-IDF VSCode extension** (Option A on Windows, or the Linux CLI) gives
+the same build/flash/monitor IDE experience with no version-lag risk.
+
+---
+
 ## Flashing multiple Muninn receivers
 
 Each Muninn must have a unique `RECEIVER_NAME` in `firmware/config.h`.
