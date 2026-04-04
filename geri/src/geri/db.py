@@ -9,12 +9,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import time
+
 import structlog
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from csi_models import CsiSample, Receiver, ReceiverHeartbeat, get_session_factory
 
+from .metrics import batch_size, batch_write_duration, batch_writes
 from .parser import CSIPacket
 
 log = structlog.get_logger(__name__)
@@ -72,12 +75,20 @@ async def insert_batch(batch: list[tuple[datetime, int, CSIPacket]]) -> None:
         for wall_time, receiver_id, pkt in batch
     ]
 
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        await session.execute(pg_insert(CsiSample), rows)
-        await session.commit()
-
-    log.debug("db.batch_inserted", count=len(rows))
+    t0 = time.perf_counter()
+    try:
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            await session.execute(pg_insert(CsiSample), rows)
+            await session.commit()
+        elapsed = time.perf_counter() - t0
+        batch_writes.labels(status="success").inc()
+        batch_write_duration.observe(elapsed)
+        batch_size.observe(len(rows))
+        log.debug("db.batch_inserted", count=len(rows), duration_ms=round(elapsed * 1000, 1))
+    except Exception:
+        batch_writes.labels(status="error").inc()
+        raise
 
 
 async def upsert_heartbeat(

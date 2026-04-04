@@ -22,6 +22,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 
 from csi_models import Receiver, ReceiverHeartbeat, get_session_factory
+from ..metrics import sse_connections_active
 
 router = APIRouter()
 
@@ -88,6 +89,7 @@ async def _fetch_snapshot() -> dict:
 
 
 async def _event_generator():
+    sse_connections_active.inc()
     try:
         while True:
             try:
@@ -98,6 +100,8 @@ async def _event_generator():
             await asyncio.sleep(POLL_INTERVAL_S)
     except asyncio.CancelledError:
         pass
+    finally:
+        sse_connections_active.dec()
 
 
 @router.get("/stream")

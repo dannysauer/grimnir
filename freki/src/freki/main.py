@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from csi_models import get_engine, init_engine, run_migrations
 
@@ -36,9 +37,18 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "info")
 FRONTEND_DIR = os.environ.get("FRONTEND_DIR", "/app/frontend")
 
 structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
     wrapper_class=structlog.make_filtering_bound_logger(
         getattr(logging, LOG_LEVEL.upper(), logging.INFO)
-    )
+    ),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
 )
 log = structlog.get_logger(__name__)
 
@@ -54,6 +64,14 @@ app.add_middleware(
 app.include_router(stream.router, prefix="/api")
 app.include_router(history.router, prefix="/api/history")
 app.include_router(labels.router, prefix="/api/labels")
+
+# Instrument all HTTP endpoints and expose /metrics.
+# Health and metrics endpoints are excluded from request duration tracking.
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/health", "/metrics"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 @app.get("/health")
@@ -91,7 +109,8 @@ def run() -> None:
         "freki.main:app",
         host=HOST,
         port=PORT,
-        log_level=LOG_LEVEL,
+        log_level=LOG_LEVEL.lower(),
+        access_log=False,  # request metrics are handled by Prometheus instrumentator
         reload=False,
     )
 

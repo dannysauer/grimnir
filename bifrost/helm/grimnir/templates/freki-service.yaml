@@ -11,6 +11,9 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.freki.service.type }}
+  # ClientIP affinity keeps long-lived SSE connections on the same pod when
+  # freki.replicaCount > 1, reducing unnecessary client reconnects.
+  sessionAffinity: ClientIP
   selector:
     {{- include "grimnir.selectorLabels" (merge (dict "component" "freki") .) | nindent 4 }}
   ports:

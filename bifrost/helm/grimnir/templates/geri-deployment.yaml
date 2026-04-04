@@ -29,8 +29,11 @@ spec:
           imagePullPolicy: {{ .Values.image.geri.pullPolicy }}
           ports:
             - name: udp-csi
-              containerPort: {{ .Values.geri.env.UDP_HOST | default 5005 | int }}
+              containerPort: {{ .Values.geri.service.port }}
               protocol: UDP
+            - name: metrics
+              containerPort: {{ .Values.geri.env.METRICS_PORT | int }}
+              protocol: TCP
           env:
             - name: DATABASE_URL
               valueFrom:

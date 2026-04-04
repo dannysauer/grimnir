@@ -11,9 +11,6 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.geri.service.type }}
-  {{- if and (eq .Values.geri.service.type "LoadBalancer") .Values.geri.service.loadBalancerIP }}
-  loadBalancerIP: {{ .Values.geri.service.loadBalancerIP }}
-  {{- end }}
   selector:
     {{- include "grimnir.selectorLabels" (merge (dict "component" "geri") .) | nindent 4 }}
   ports:
@@ -21,3 +18,9 @@ spec:
       port: {{ .Values.geri.service.port }}
       targetPort: udp-csi
       protocol: UDP
+    {{- if .Values.prometheus.serviceMonitor.enabled }}
+    - name: metrics
+      port: {{ .Values.geri.env.METRICS_PORT | int }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}

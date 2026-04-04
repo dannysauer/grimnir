@@ -25,10 +25,12 @@ import signal
 from datetime import datetime, timezone
 
 import structlog
+from prometheus_client import start_http_server
 
 from csi_models import init_engine, run_migrations
 
 from .db import get_or_create_receiver_id, insert_batch, upsert_heartbeat
+from .metrics import packets_dropped, packets_invalid, packets_received
 from .parser import ParseError, parse_packet
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -39,11 +41,22 @@ UDP_PORT = int(os.environ.get("UDP_PORT", "5005"))
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "50"))
 BATCH_TIMEOUT_MS = int(os.environ.get("BATCH_TIMEOUT_MS", "500"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
+# Set to 0 to disable the Prometheus HTTP server
+METRICS_PORT = int(os.environ.get("METRICS_PORT", "8001"))
 
 structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
     wrapper_class=structlog.make_filtering_bound_logger(
         getattr(logging, LOG_LEVEL, logging.INFO)
-    )
+    ),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
 )
 log = structlog.get_logger(__name__)
 
@@ -63,13 +76,16 @@ class CSIUDPProtocol(asyncio.DatagramProtocol):
             pkt = parse_packet(data)
         except ParseError as exc:
             log.warning("udp.parse_error", addr=addr, error=str(exc))
+            packets_invalid.inc()
             return
 
+        packets_received.labels(receiver_name=pkt.receiver_name).inc()
         wall_time = datetime.now(tz=timezone.utc)
         try:
             self._queue.put_nowait((wall_time, addr[0], pkt))
         except asyncio.QueueFull:
             self._dropped += 1
+            packets_dropped.inc()
             if self._dropped % 100 == 1:
                 log.warning("udp.queue_full", dropped_total=self._dropped)
 
@@ -127,6 +143,10 @@ async def batch_writer(queue: asyncio.Queue) -> None:
 
 async def main() -> None:
     log.info("aggregator.starting")
+
+    if METRICS_PORT > 0:
+        start_http_server(METRICS_PORT)
+        log.info("metrics.listening", port=METRICS_PORT)
 
     log.info("migrations.running")
     run_migrations(DATABASE_URL)
