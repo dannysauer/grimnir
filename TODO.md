@@ -16,8 +16,9 @@ as GitHub issues where noted.
 
 ## CI/CD
 
-- [ ] **Renovate integration** — add `renovate.json` so dependency version bumps
-      are automated (chore commits → patch releases).
+- [x] **Renovate integration** — `renovate.json5` added; manages Python deps,
+      Docker base images (SHA-pinned), GitHub Actions (SHA-pinned), and
+      PlatformIO platform versions. Updates grouped per manager.
       _(#2)_
 
 - [ ] **Supply chain security** — SBOM generation (`syft`), image signing (`cosign`),

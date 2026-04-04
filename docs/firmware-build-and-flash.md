@@ -147,23 +147,50 @@ The serial port is typically `COM3`, `COM4`, etc. — check Device Manager if
 
 ---
 
-## PlatformIO
+## Linux (PlatformIO CLI)
 
-PlatformIO is **not recommended** for this project. While it can build ESP-IDF projects
-(using `framework = espidf` in `platformio.ini`), there are practical downsides:
+If you already have PlatformIO installed (for example, via ESPHome), you can use it
+instead of the ESP-IDF CLI — no separate IDF installation required.
 
-- PlatformIO packages ESP-IDF as a versioned platform dependency and lags behind upstream
-  releases. The CSI capture APIs changed in ESP-IDF v5.x; an outdated bundled version
-  can cause subtle breakage without a clear error.
-- The ESP-IDF Arduino framework (PlatformIO's typical default) does **not** expose the
-  `esp_wifi_set_csi_config` / `esp_wifi_set_csi_rx_cb` APIs that Muninn requires.
-  You must explicitly specify `framework = espidf` — which means you are essentially
-  using raw ESP-IDF anyway, without PlatformIO's main benefit (library management).
-- The firmware has no external library dependencies, so PlatformIO's component registry
-  adds nothing here.
+**Important:** the firmware uses CSI capture APIs that are only available in the
+**ESP-IDF framework**. Make sure you are using `framework = espidf` (already set in the
+`platformio.ini` files) and **not** the Arduino framework, which does not expose these APIs.
 
-The official **ESP-IDF VSCode extension** (Option A on Windows, or the Linux CLI) gives
-the same build/flash/monitor IDE experience with no version-lag risk.
+The `espressif32` platform version in `platformio.ini` is managed by Renovate — it will
+be kept pinned to a specific version that ships ESP-IDF ≥5.1 and updated automatically.
+
+### 1. Build Huginn (transmitter)
+
+```bash
+cd firmware/huginn
+pio run
+```
+
+### 2. Build Muninn (receiver)
+
+Edit `firmware/config.h` — set `RECEIVER_NAME` to the unique name for this board.
+
+```bash
+cd firmware/muninn
+pio run
+```
+
+### 3. Flash and monitor
+
+```bash
+# Flash and open serial monitor (Ctrl+C to exit)
+pio run -t upload && pio device monitor
+
+# Flash only
+pio run -t upload
+
+# Specify port explicitly if auto-detection fails
+pio run -t upload --upload-port /dev/ttyUSB0
+pio device monitor --port /dev/ttyUSB0
+
+# ESP32-S3 native USB CDC port (if using the USB OTG connector)
+pio run -t upload --upload-port /dev/ttyACM0
+```
 
 ---
 

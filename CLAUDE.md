@@ -45,6 +45,7 @@ grimnir/
 ├── .env.example                    # Environment variable template
 ├── .pre-commit-config.yaml         # pre-commit hook configuration
 ├── pyproject.toml                  # Root ruff/tool config (not a package)
+├── renovate.json5                  # Renovate dependency update config (SHA-pinned)
 ├── .claude/
 │   ├── settings.json               # Claude Code hooks (runs pre-commit before commits)
 │   └── hooks/
@@ -81,8 +82,12 @@ grimnir/
 │   └── index.html                  # Single-file mobile-first dashboard (vanilla JS)
 ├── firmware/
 │   ├── config.h                    # ← EDIT BEFORE FLASHING each board
-│   ├── huginn/main/main.c          # Transmitter ESP-IDF v5.1+ C firmware
-│   └── muninn/main/main.c          # Receiver ESP-IDF v5.1+ C firmware
+│   ├── huginn/
+│   │   ├── platformio.ini          # PlatformIO build (framework = espidf)
+│   │   └── main/main.c             # Transmitter ESP-IDF v5.1+ C firmware
+│   └── muninn/
+│       ├── platformio.ini          # PlatformIO build (framework = espidf)
+│       └── main/main.c             # Receiver ESP-IDF v5.1+ C firmware
 └── bifrost/                        # Deployment: Compose + Helm + Ansible
     ├── compose.yaml
     ├── helm/grimnir/               # Helm chart (both geri + freki)
@@ -354,6 +359,10 @@ geri:
 See `docs/firmware-build-and-flash.md` for full Linux and Windows build instructions.
 
 - ESP-IDF v5.1+, target `esp32s3`; firmware is built locally (credentials embedded)
+- **Two build systems supported** — use whichever you have installed:
+  - **ESP-IDF CLI** (`idf.py build flash monitor`) — see Linux/Windows sections in the guide
+  - **PlatformIO CLI** (`pio run -t upload`) — uses `firmware/{huginn,muninn}/platformio.ini`;
+    must use `framework = espidf` (CSI APIs are not available in the Arduino framework)
 - Edit `firmware/config.h` before each flash:
   - `WIFI_SSID` / `WIFI_PASSWORD`
   - `AGGREGATOR_HOST` — DNS name of aggregator (resolved via DHCP-provided DNS)

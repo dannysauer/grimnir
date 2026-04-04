@@ -1,0 +1,50 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Start from Renovate's recommended preset, then layer our overrides below.
+  extends: ["config:recommended"],
+
+  // Pin all supported managers to digest/SHA (Docker images, GitHub Actions).
+  // This means Renovate will open a PR if a SHA rotates even within the same tag.
+  pinDigests: true,
+
+  // Don't scan the vendored Google style guide subtree — it is managed via
+  // `git subtree pull` and has no dependency manifests Renovate understands.
+  ignorePaths: [
+    "docs/style-guides/**",
+  ],
+
+  packageRules: [
+    {
+      // Batch all GitHub Actions bumps (including digest rotations) into one PR
+      // rather than one PR per action.
+      description: "Group GitHub Actions updates",
+      matchManagers: ["github-actions"],
+      groupName: "github-actions",
+      pinDigests: true,
+    },
+    {
+      // Batch all Dockerfile FROM image updates into one PR.
+      // Images are pinned to SHA so Renovate will also track digest rotations.
+      description: "Group Docker base image updates",
+      matchManagers: ["dockerfile"],
+      groupName: "docker-base-images",
+      pinDigests: true,
+    },
+    {
+      // Batch geri + freki Python dependency bumps into one PR.
+      // Both pyproject.toml files use [project] dependencies (pep621 manager).
+      description: "Group Python dependency updates",
+      matchManagers: ["pep621"],
+      groupName: "python-dependencies",
+    },
+    {
+      // Batch PlatformIO platform and lib_deps bumps into one PR.
+      // The espressif32 platform version determines which ESP-IDF ships —
+      // review these PRs before merging to confirm IDF ≥5.1 is still satisfied.
+      description: "Group PlatformIO platform and library updates",
+      matchManagers: ["platformio"],
+      groupName: "platformio",
+    },
+  ],
+}
