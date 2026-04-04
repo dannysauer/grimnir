@@ -121,7 +121,7 @@ async def batch_writer(queue: asyncio.Queue) -> None:
             receiver_cache[pkt.receiver_name] = receiver_id
         receiver_id = receiver_cache[pkt.receiver_name]
 
-        now = asyncio.get_event_loop().time()
+        now = asyncio.get_running_loop().time()
         if now - last_heartbeat.get(receiver_id, 0.0) > heartbeat_interval:
             await upsert_heartbeat(receiver_id, ip_address=src_ip)
             last_heartbeat[receiver_id] = now

@@ -1,7 +1,7 @@
 """
 parser.py — Binary CSI UDP packet parser.
 
-Mirrors the packet format defined in firmware/receiver/main/main.c
+Mirrors the packet format defined in firmware/muninn/main/main.c
 
 Wire layout (little-endian):
   Offset  Size  Type        Field

@@ -485,6 +485,16 @@
 
 const API = window.location.origin;
 
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const receivers = {};        // id → receiver object
 const rssiHistory = {};      // name → [{x, y}]
@@ -590,8 +600,8 @@ function renderCards(rxList) {
     card.innerHTML = `
       <div class="rx-header">
         <div>
-          <div class="rx-name">${rx.name}</div>
-          <div class="rx-loc">floor ${rx.floor ?? '?'} · ${rx.location ?? '—'}</div>
+          <div class="rx-name">${escHtml(rx.name)}</div>
+          <div class="rx-loc">floor ${escHtml(rx.floor ?? '?')} · ${escHtml(rx.location ?? '—')}</div>
         </div>
         <div class="rx-pill ${stale ? 'stale' : 'live'}">${stale ? 'stale' : 'live'}</div>
       </div>
@@ -654,8 +664,6 @@ function initCharts() {
 function updateCharts() {
   if (!rssiChart || !varChart) return;
   const rxList = Object.values(receivers);
-
-  [rssiChart, rssiHistory, varChart, varHistory].forEach(_ => {}); // ensure exist
 
   rssiChart.data.datasets = rxList
     .filter(rx => rssiHistory[rx.name]?.length)
@@ -766,7 +774,7 @@ function drawHeatmap(sample) {
     <span>${cols} subcarriers · ${rows} antenna${rows > 1 ? 's' : ''}</span>
     <span>RSSI ${sample.rssi} dBm</span>
     <span>${t.toLocaleTimeString()}</span>
-    ${sample.label ? `<span style="color:var(--accent2)">${sample.label}</span>` : ''}
+    ${sample.label ? `<span style="color:var(--accent2)">${escHtml(sample.label)}</span>` : ''}
   `;
 }
 
@@ -850,10 +858,10 @@ function renderLabels(labels) {
     return `
       <div class="label-item">
         <div>
-          <div class="label-room">${l.room} · ${l.occupants} occ</div>
-          <div class="label-time">${day} ${s} – ${e}${l.notes ? ' · ' + l.notes : ''}</div>
+          <div class="label-room">${escHtml(l.room)} · ${escHtml(l.occupants)} occ</div>
+          <div class="label-time">${escHtml(day)} ${escHtml(s)} – ${escHtml(e)}${l.notes ? ' · ' + escHtml(l.notes) : ''}</div>
         </div>
-        <button class="label-del" onclick="deleteLabel(${l.id})" title="Delete">✕</button>
+        <button class="label-del" onclick="deleteLabel(${parseInt(l.id)})" title="Delete">✕</button>
       </div>
     `;
   }).join('');

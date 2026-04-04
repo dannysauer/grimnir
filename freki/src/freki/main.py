@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
+from contextlib import asynccontextmanager
 
 import structlog
 import uvicorn
@@ -51,7 +52,22 @@ structlog.configure(
 )
 log = structlog.get_logger(__name__)
 
-app = FastAPI(title="CSI Localization API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    log.info("backend.starting")
+    log.info("migrations.running")
+    run_migrations(DATABASE_URL)
+    log.info("migrations.done")
+    init_engine(DATABASE_URL)
+    log.info("db.engine_initialised")
+    yield
+    engine = get_engine()
+    await engine.dispose()
+    log.info("backend.stopped")
+
+
+app = FastAPI(title="CSI Localization API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -81,23 +97,6 @@ async def health():
 _frontend = pathlib.Path(FRONTEND_DIR)
 if _frontend.exists():
     app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="frontend")
-
-
-@app.on_event("startup")
-async def startup() -> None:
-    log.info("backend.starting")
-    log.info("migrations.running")
-    run_migrations(DATABASE_URL)
-    log.info("migrations.done")
-    init_engine(DATABASE_URL)
-    log.info("db.engine_initialised")
-
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
-    engine = get_engine()
-    await engine.dispose()
-    log.info("backend.stopped")
 
 
 def run() -> None:
