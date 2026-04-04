@@ -41,7 +41,21 @@ See `GRIMNIR.md` for the full naming reference. Summary:
 grimnir/
 ├── CLAUDE.md
 ├── GRIMNIR.md                      # Naming reference (see this for full Norse map)
+├── TODO.md                         # Checklist cross-referencing GitHub issues
 ├── .env.example                    # Environment variable template
+├── .pre-commit-config.yaml         # pre-commit hook configuration
+├── pyproject.toml                  # Root ruff/tool config (not a package)
+├── .claude/
+│   ├── settings.json               # Claude Code hooks (runs pre-commit before commits)
+│   └── hooks/
+│       └── pre-commit-check.sh     # PreToolUse hook script
+├── docs/
+│   ├── firmware-build-and-flash.md # Linux + Windows firmware build guide
+│   └── style-guides/
+│       └── google/                 # Google style guides (git subtree, gh-pages branch)
+│           ├── pyguide.md          # Python style guide
+│           ├── shellguide.md       # Shell style guide
+│           └── ...                 # cppguide.html, jsguide.html, etc.
 ├── mimir/
 │   └── 001_schema.sql              # Database schema — run once to set up TimescaleDB
 ├── geri/                           # UDP → TimescaleDB writer
@@ -50,13 +64,15 @@ grimnir/
 │   └── src/geri/
 │       ├── main.py                 # UDP listener + batch writer + startup sequence
 │       ├── parser.py               # Binary CSI packet parser (mirrors firmware format)
-│       └── db.py                   # SQLAlchemy insert helpers
+│       ├── db.py                   # SQLAlchemy insert helpers
+│       └── metrics.py              # Prometheus metrics definitions
 ├── freki/                          # FastAPI REST + SSE
 │   ├── pyproject.toml
 │   ├── Dockerfile
 │   └── src/freki/
 │       ├── main.py                 # FastAPI app + startup sequence
 │       ├── db.py                   # SessionDep FastAPI dependency
+│       ├── metrics.py              # Prometheus metrics definitions
 │       └── routers/
 │           ├── stream.py           # GET /api/stream  (SSE, 1s updates)
 │           ├── history.py          # GET /api/history/variance|snapshot|receivers
@@ -69,8 +85,13 @@ grimnir/
 │   └── muninn/main/main.c          # Receiver ESP-IDF v5.1+ C firmware
 └── bifrost/                        # Deployment: Compose + Helm + Ansible
     ├── compose.yaml
-    ├── helm/
-    └── ansible/deploy.yaml
+    ├── helm/grimnir/               # Helm chart (both geri + freki)
+    │   ├── Chart.yaml
+    │   ├── values.yaml             # All options documented inline
+    │   ├── files/
+    │   │   └── grimnir-dashboard.json  # Grafana dashboard (Helm .Files.Get)
+    │   └── templates/              # Kubernetes manifests
+    └── ansible/deploy.yaml         # Ansible → Helm deploy with MetalLB/external-dns
 ```
 
 ## Technology Stack
@@ -143,6 +164,59 @@ options, API endpoints, or breaking changes, **always** update:
    `mcp__github__issue_write` tool
 
 These updates are not optional — they ensure continuity across agent sessions.
+
+## Code Style
+
+This project uses the **Google style guides** for all languages. The guides are
+vendored as a git subtree at `docs/style-guides/google/` and are always
+available without a network connection.
+
+| Language | Guide |
+|----------|-------|
+| Python | `docs/style-guides/google/pyguide.md` |
+| Shell | `docs/style-guides/google/shellguide.md` |
+| C (firmware) | `docs/style-guides/google/cppguide.html` (C++ guide; apply C-compatible rules) |
+| HTML/CSS | `docs/style-guides/google/htmlcssguide.html` |
+| JavaScript | `docs/style-guides/google/jsguide.html` |
+
+Key Python rules from the Google guide that apply here:
+- 4-space indentation (enforced by ruff-format)
+- `"""Docstrings."""` for all public functions/classes
+- Type annotations on all function signatures
+- `from __future__ import annotations` at the top of every file
+- No mutable default arguments
+- Prefer `with` statements for resource management
+
+To update the style guides to the latest version:
+```bash
+git subtree pull --prefix=docs/style-guides/google \
+  https://github.com/google/styleguide.git gh-pages --squash
+```
+
+## Pre-Commit
+
+All commits **must** pass pre-commit checks. The hooks run automatically via
+the `.claude/settings.json` PreToolUse hook — do not use `--no-verify` unless
+explicitly instructed.
+
+To install pre-commit locally:
+```bash
+pip install pre-commit
+pre-commit install        # installs the git hook
+pre-commit run --all-files  # run manually against all files
+```
+
+Hooks configured in `.pre-commit-config.yaml`:
+- **trailing-whitespace**, **end-of-file-fixer**, **check-yaml**, **check-json**,
+  **check-merge-conflict** — general hygiene
+- **ruff** — Python linting with auto-fix (E, F, I/isort, W, UP, B rules)
+- **ruff-format** — Python formatting (black-compatible, 100-char lines)
+- **shellcheck** — shell script linting (warning severity)
+- **actionlint** — GitHub Actions workflow linting (including inline shell)
+
+pre-commit.ci runs on every PR and auto-pushes fixes. Chart templates
+(`bifrost/helm/grimnir/templates/`) are excluded from YAML checking because
+Helm's `{{ }}` syntax is not valid YAML.
 
 ## Database
 
