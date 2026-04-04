@@ -1,0 +1,39 @@
+# Root pyproject.toml — shared tool configuration.
+# Python packages (geri, freki, mimir) have their own pyproject.toml for
+# build metadata; this file configures linters and formatters for the entire
+# repository.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+# Only check Python source files; ignore generated/vendored paths.
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "docs/style-guides/",  # vendored external guides
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade — enforce modern Python syntax
+    "B",   # flake8-bugbear — common bug patterns
+]
+ignore = [
+    "E501",   # line length — handled by the formatter
+    "B008",   # function calls in default args (FastAPI Depends pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py re-exports are intentionally "unused" from the linter's perspective.
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

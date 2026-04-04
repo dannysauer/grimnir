@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import logging
 import os
+import pathlib
 
 import structlog
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -78,9 +78,6 @@ Instrumentator(
 async def health():
     return {"status": "ok"}
 
-
-# Serve frontend static files if the directory exists
-import pathlib
 
 _frontend = pathlib.Path(FRONTEND_DIR)
 if _frontend.exists():

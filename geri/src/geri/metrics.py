@@ -7,7 +7,7 @@ All metrics use the "geri_" namespace.
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 packets_received = Counter(
     "geri_packets_received_total",
@@ -41,4 +41,10 @@ batch_size = Histogram(
     "geri_batch_size_rows",
     "Number of CSI rows in each batch write",
     buckets=[1, 5, 10, 25, 50, 100, 200, 500],
+)
+
+receiver_last_seen = Gauge(
+    "geri_receiver_last_seen_timestamp_seconds",
+    "Unix timestamp of the last heartbeat received from this Muninn device",
+    ["receiver_name"],
 )

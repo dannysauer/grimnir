@@ -364,6 +364,7 @@
   <header>
     <div class="logo">CSI<span>//</span>MONITOR</div>
     <div id="last-update" style="flex:1;text-align:center"></div>
+    <div id="rx-summary" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);white-space:nowrap"></div>
     <div class="stream-badge">
       <div class="dot" id="stream-dot"></div>
       <span id="stream-label">connecting</span>
@@ -537,6 +538,7 @@ function onStreamUpdate(data) {
   }
 
   renderCards(data.receivers);
+  updateRxSummary(data.receivers);
   updateCharts();
   syncHeatmapSelector(data.receivers);
 
@@ -544,6 +546,16 @@ function onStreamUpdate(data) {
     historyLoaded = true;
     loadHistory();
   }
+}
+
+// ── Receiver summary (header) ─────────────────────────────────────────────────
+function updateRxSummary(rxList) {
+  const live  = rxList.filter(rx => !isStale(rx)).length;
+  const total = rxList.length;
+  const el = document.getElementById('rx-summary');
+  if (total === 0) { el.textContent = ''; return; }
+  el.textContent = `${live}/${total} live`;
+  el.style.color = live === total ? 'var(--accent2)' : live === 0 ? 'var(--warn)' : 'var(--text-dim)';
 }
 
 // ── Receiver cards ────────────────────────────────────────────────────────────

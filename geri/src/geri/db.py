@@ -7,9 +7,8 @@ main.py after migrations have run.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import time
+from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import select, update

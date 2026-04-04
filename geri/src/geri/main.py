@@ -22,6 +22,7 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from datetime import datetime, timezone
 
 import structlog
@@ -30,7 +31,7 @@ from prometheus_client import start_http_server
 from csi_models import init_engine, run_migrations
 
 from .db import get_or_create_receiver_id, insert_batch, upsert_heartbeat
-from .metrics import packets_dropped, packets_invalid, packets_received
+from .metrics import packets_dropped, packets_invalid, packets_received, receiver_last_seen
 from .parser import ParseError, parse_packet
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -131,6 +132,7 @@ async def batch_writer(queue: asyncio.Queue) -> None:
         if now - last_heartbeat.get(receiver_id, 0.0) > heartbeat_interval:
             await upsert_heartbeat(receiver_id, ip_address=src_ip)
             last_heartbeat[receiver_id] = now
+            receiver_last_seen.labels(receiver_name=pkt.receiver_name).set(time.time())
 
         batch.append((wall_time, receiver_id, pkt))
         if len(batch) >= BATCH_SIZE:
