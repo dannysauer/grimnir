@@ -2,7 +2,7 @@
 main.py — CSI Aggregator
 
 Startup sequence:
-  1. Run Alembic migrations (idempotent)
+  1. Run bundled SQL bootstrap migrations (idempotent)
   2. Initialise SQLAlchemy async engine
   3. Bind UDP socket
   4. Batch-write CSI packets to TimescaleDB

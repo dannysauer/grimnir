@@ -3,22 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "geri"
+name = "csi-models"
 version = "0.1.0"
-description = "UDP CSI packet receiver → PostgreSQL/TimescaleDB writer"
+description = "Shared Grimnir database models and bootstrap migrations"
 requires-python = ">=3.12"
 dependencies = [
-    "csi-models",
     "sqlalchemy==2.0.36",
     "asyncpg==0.30.0",
     "psycopg2-binary==2.9.10",
     "greenlet==3.1.1",
-    "structlog==24.4.0",
-    "prometheus-client==0.21.0",
 ]
 
-[project.scripts]
-geri = "geri.main:run"
-
 [tool.hatch.build.targets.wheel]
-packages = ["src/geri"]
+packages = ["src/csi_models"]

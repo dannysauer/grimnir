@@ -23,7 +23,7 @@ See `GRIMNIR.md` for the full naming reference. Summary:
 | Aggregator service | **Geri** (`geri/`) | UDP → TimescaleDB writer |
 | Backend API | **Freki** (`freki/`) | FastAPI REST + SSE |
 | Frontend | **Hlidskjalf** (`hlidskjalf/`) | Web dashboard |
-| Database/models | **Mimir** (`mimir/`) | SQLAlchemy + Alembic (not yet implemented) |
+| Database/models | **Mimir** (`mimir/`) | SQLAlchemy models + first-boot SQL bootstrap |
 | Deployment | **Bifrost** (`bifrost/`) | Compose, Helm, Ansible |
 
 ## Hardware
@@ -58,7 +58,14 @@ grimnir/
 │           ├── shellguide.md       # Shell style guide
 │           └── ...                 # cppguide.html, jsguide.html, etc.
 ├── mimir/
-│   └── 001_schema.sql              # Database schema — run once to set up TimescaleDB
+│   ├── pyproject.toml
+│   ├── 001_schema.sql              # SQL reference for the schema/bootstrap
+│   └── src/csi_models/
+│       ├── __init__.py             # Public exports for shared DB helpers/models
+│       ├── engine.py               # Async engine + session factory initialisation
+│       ├── migrate.py              # Idempotent first-boot SQL bootstrap runner
+│       ├── models.py               # Shared SQLAlchemy ORM models
+│       └── sql/001_schema.sql      # Bundled bootstrap SQL for installed package
 ├── geri/                           # UDP → TimescaleDB writer
 │   ├── pyproject.toml
 │   ├── Dockerfile
@@ -107,7 +114,7 @@ grimnir/
 | Transport | UDP binary packets | Custom wire format, see below |
 | Aggregator | Python 3.12, asyncio | SQLAlchemy async + asyncpg; prometheus-client for metrics |
 | Database | PostgreSQL 12 + TimescaleDB 2.11.2 | External server (not containerised) |
-| ORM / Migrations | SQLAlchemy 2.0, Alembic | models package shared by all services |
+| ORM / Migrations | SQLAlchemy 2.0, bundled SQL bootstrap | shared `csi_models` package used by all services |
 | Backend | FastAPI, uvicorn | SSE + REST; prometheus-fastapi-instrumentator for metrics |
 | Frontend | Vanilla JS, Chart.js 4, date-fns adapter | Single HTML file |
 | Containers | Docker, Docker Compose | Build context is repo root |
@@ -122,7 +129,7 @@ grimnir/
   (`python 3.12.7`, `nodejs 24.14.1`, `helm 3.16.2`)
 - All new code uses `pyproject.toml` with `hatchling` build backend
 - Dependencies pinned to specific versions
-- `asyncio` throughout; asyncpg driver at runtime, psycopg2-binary only for Alembic migrations
+- `asyncio` throughout; asyncpg driver at runtime, psycopg2-binary for sync bootstrap/migration work
 - `structlog` for logging in all services — **always JSON** (see Logging Requirements below)
 - Type hints everywhere; `from __future__ import annotations` at top of each file
 
@@ -248,9 +255,10 @@ Helm's `{{ }}` syntax is not valid YAML.
 - Retention: drop raw chunks after 90 days
 - Continuous aggregate `csi_variance_1min` refreshes every minute
 
-**Schema management:** ORM models in `mimir/`, migrations via Alembic. Both services
+**Schema management:** ORM models and bootstrap logic live in `mimir/`. Both services
 run `run_migrations(DATABASE_URL)` at startup (idempotent). `mimir/001_schema.sql`
-is a plain-SQL reference of the same schema, useful for bootstrapping or inspection.
+is the plain-SQL reference of the same schema, and `mimir/src/csi_models/sql/001_schema.sql`
+is bundled into the installed package for first-boot bootstrap.
 
 To bootstrap a fresh database manually:
 ```bash
@@ -258,7 +266,8 @@ psql -U postgres -c "CREATE DATABASE csi;"
 psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme'; GRANT ALL ON DATABASE csi TO csi_user;"
 psql -U postgres -d csi -f mimir/001_schema.sql
 ```
-Or just start a service with `DATABASE_URL` set — Alembic will apply migrations automatically.
+Or just start a service with `DATABASE_URL` set — the bundled SQL bootstrap will
+create the schema automatically.
 
 ## UDP Wire Protocol
 
@@ -286,11 +295,11 @@ All little-endian. Header is exactly 44 bytes (`_Static_assert` in firmware conf
 
 ## Startup Sequence (both aggregator and backend)
 
-1. Call `run_migrations(DATABASE_URL)` — Alembic upgrades to head (idempotent)
+1. Call `run_migrations(DATABASE_URL)` — bundled SQL bootstrap runs pending migrations (idempotent)
 2. Call `init_engine(DATABASE_URL)` — creates SQLAlchemy async engine + session factory
 3. Start service (UDP listener / uvicorn)
 
-Migrations use psycopg2 (sync). Runtime uses asyncpg. `migrate.py` handles URL
+Bootstrap uses psycopg2 (sync). Runtime uses asyncpg. `migrate.py` handles URL
 conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 
 ## API Endpoints
@@ -394,8 +403,6 @@ Helm chart supports optional `ServiceMonitor` resources and a Grafana sidecar
 
 See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 
-- [ ] **Mimir package** (#1) — `geri` and `freki` cannot run until SQLAlchemy
-      models, Alembic migrations, engine factory, and `migrate.py` are built
 - [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
 - [ ] **SQL injection in labels.py** (#6) — `list_labels` builds raw INTERVAL clause
 - [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth

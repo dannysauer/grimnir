@@ -7,9 +7,9 @@ as GitHub issues where noted.
 
 ## Blocking / High Priority
 
-- [ ] **Mimir package** — SQLAlchemy ORM models, Alembic migrations, engine factory,
-      and `migrate.py`. Both `geri` and `freki` import `from csi_models import ...`
-      and cannot run until this is built.
+- [x] **Mimir package** — `csi_models` now provides SQLAlchemy ORM models,
+      engine/session helpers, and idempotent first-boot SQL bootstrap for
+      `geri` and `freki`.
       _(#1)_
 
 ---

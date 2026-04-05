@@ -19,7 +19,7 @@ The project uses Norse names for each component, following the raven/wolf theme 
 | **Geri** | `geri/` | Aggregator service — receives UDP CSI packets from Muninn devices and batch-writes them to TimescaleDB |
 | **Freki** | `freki/` | Backend API — FastAPI service providing REST endpoints and Server-Sent Events for live receiver status and historical data |
 | **Hlidskjalf** | `hlidskjalf/` | Web dashboard — single-file vanilla JS frontend for live CSI visualization, variance charts, subcarrier heatmaps, and ML training data labeling |
-| **Mimir** | `mimir/` | Database layer — TimescaleDB schema, SQLAlchemy ORM models, and Alembic migrations *(not yet implemented — next milestone)* |
+| **Mimir** | `mimir/` | Database layer — TimescaleDB schema, SQLAlchemy ORM models, async engine helpers, and first-boot SQL bootstrap |
 | **Bifrost** | `bifrost/` | Deployment infrastructure — Docker Compose for standalone deployment, Helm chart for Kubernetes, and Ansible playbook for automated rollout |
 
 ---
@@ -51,7 +51,16 @@ This repo currently pins:
 
 ### Database
 
-Install TimescaleDB on your PostgreSQL server, then run the schema:
+Install TimescaleDB on your PostgreSQL server.
+
+If the database in `DATABASE_URL` already exists, Grimnir now bootstraps the
+schema automatically on first service start. `mimir/001_schema.sql` remains the
+authoritative SQL reference and can still be applied manually if needed.
+
+If the database does not exist and the configured user has `CREATEDB`, the
+startup bootstrap will create it automatically before applying the schema.
+
+Manual bootstrap reference:
 
 ```bash
 psql -U postgres -c "CREATE DATABASE csi;"
@@ -93,8 +102,8 @@ idf.py build flash monitor
 |-----------|--------|
 | Huginn firmware | ✅ Written |
 | Muninn firmware | ✅ Written |
-| Geri aggregator | ✅ Written — blocked on Mimir |
-| Freki backend | ✅ Written — blocked on Mimir |
+| Geri aggregator | ✅ Written |
+| Freki backend | ✅ Written |
 | Hlidskjalf dashboard | ✅ Written |
-| Mimir (DB models + migrations) | 🚧 Not yet implemented |
+| Mimir (DB models + bootstrap migrations) | ✅ Written |
 | ML training pipeline | 📋 Planned |
