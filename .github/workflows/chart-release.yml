@@ -9,6 +9,11 @@ on:
         type: string
         required: false
         default: ""
+      changelog:
+        description: Changelog from the container image release (conventional commit list)
+        type: string
+        required: false
+        default: ""
 
   # Also trigger on standalone changes to the chart source
   push:
@@ -125,6 +130,46 @@ jobs:
           git tag "chart-v${CHART_VERSION}"
           git push origin "chart-v${CHART_VERSION}"
 
+      - name: Generate release notes
+        if: steps.version.outputs.release == 'true'
+        env:
+          APP_VERSION: ${{ inputs.app_version }}
+          CHANGELOG: ${{ inputs.changelog }}
+          CHART_VERSION: ${{ steps.version.outputs.chart_version }}
+        run: |
+          {
+            echo "## Grimnir Helm chart v${CHART_VERSION}"
+            echo ""
+            if [ -n "$APP_VERSION" ]; then
+              echo "### Container images"
+              echo ""
+              echo '```'
+              echo "ghcr.io/dannysauer/grimnir/geri:${APP_VERSION}"
+              echo "ghcr.io/dannysauer/grimnir/freki:${APP_VERSION}"
+              echo '```'
+              echo ""
+            fi
+            if [ -n "$CHANGELOG" ]; then
+              echo "### Changes"
+              echo ""
+              echo "$CHANGELOG"
+              echo ""
+            fi
+            echo "### Install"
+            echo '```bash'
+            echo "helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \\"
+            echo "  --version ${CHART_VERSION} \\"
+            echo '  --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"'
+            echo '```'
+            echo ""
+            echo "### Upgrade"
+            echo '```bash'
+            echo "helm upgrade grimnir oci://ghcr.io/dannysauer/charts/grimnir \\"
+            echo "  --version ${CHART_VERSION} \\"
+            echo "  --reuse-values"
+            echo '```'
+          } > release-notes.md
+
       - name: Create GitHub release for chart
         if: steps.version.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
@@ -132,19 +177,4 @@ jobs:
           tag_name: chart-v${{ steps.version.outputs.chart_version }}
           name: "chart-v${{ steps.version.outputs.chart_version }}"
           files: "grimnir-${{ steps.version.outputs.chart_version }}.tgz"
-          body: |
-            ## Grimnir Helm chart v${{ steps.version.outputs.chart_version }}
-
-            Install:
-            ```bash
-            helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
-              --version ${{ steps.version.outputs.chart_version }} \
-              --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"
-            ```
-
-            Upgrade:
-            ```bash
-            helm upgrade grimnir oci://ghcr.io/dannysauer/charts/grimnir \
-              --version ${{ steps.version.outputs.chart_version }} \
-              --reuse-values
-            ```
+          body_path: release-notes.md
