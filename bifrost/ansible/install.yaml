@@ -1,0 +1,242 @@
+---
+# bifrost/ansible/install.yaml
+# Provision the external PostgreSQL/TimescaleDB database, then deploy Grimnir.
+#
+# This playbook assumes:
+# - PostgreSQL runs on the Ansible host named `humpy`
+# - PostgreSQL local peer auth allows `become_user: postgres`
+# - k3s access is available from localhost via ~/.kube/config
+# - the Grimnir chart is published to GHCR as an OCI chart
+#
+# Usage:
+#   ansible-playbook bifrost/ansible/install.yaml -e @/path/to/grimnir.yml
+
+- name: Provision Grimnir database
+  hosts: "{{ grimnir_db_admin_host | default('humpy') }}"
+  gather_facts: false
+  become: true
+  become_user: postgres
+
+  vars:
+    grimnir_db_name: grimnir
+    grimnir_db_user: grimnir
+    grimnir_db_port: 5432
+    grimnir_db_password: ""
+
+  tasks:
+    - name: Validate database vars
+      ansible.builtin.assert:
+        that:
+          - grimnir_db_name | length > 0
+          - grimnir_db_user | length > 0
+          - grimnir_db_password | length > 0
+        fail_msg: "grimnir_db_name, grimnir_db_user, and grimnir_db_password are required"
+
+    - name: Check whether Grimnir role exists
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -tAc
+          - "SELECT 1 FROM pg_roles WHERE rolname = '{{ grimnir_db_user }}'"
+          - postgres
+      register: grimnir_role_exists
+      changed_when: false
+
+    - name: Create Grimnir role
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -c
+          - "CREATE ROLE {{ grimnir_db_user }} LOGIN PASSWORD '{{ grimnir_db_password }}';"
+          - postgres
+      when: grimnir_role_exists.stdout.strip() != "1"
+
+    - name: Ensure Grimnir role password is current
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -c
+          - "ALTER ROLE {{ grimnir_db_user }} WITH LOGIN PASSWORD '{{ grimnir_db_password }}';"
+          - postgres
+      changed_when: true
+
+    - name: Check whether Grimnir database exists
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -tAc
+          - "SELECT 1 FROM pg_database WHERE datname = '{{ grimnir_db_name }}'"
+          - postgres
+      register: grimnir_db_exists
+      changed_when: false
+
+    - name: Create Grimnir database
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -c
+          - "CREATE DATABASE {{ grimnir_db_name }} OWNER {{ grimnir_db_user }};"
+          - postgres
+      when: grimnir_db_exists.stdout.strip() != "1"
+
+    - name: Ensure Grimnir database owner is correct
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -c
+          - "ALTER DATABASE {{ grimnir_db_name }} OWNER TO {{ grimnir_db_user }};"
+          - postgres
+      changed_when: true
+
+    - name: Check whether TimescaleDB extension is installed
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -d
+          - "{{ grimnir_db_name }}"
+          - -tAc
+          - "SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'"
+      register: grimnir_timescaledb_exists
+      changed_when: false
+
+    - name: Install TimescaleDB extension
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -d
+          - "{{ grimnir_db_name }}"
+          - -c
+          - "CREATE EXTENSION timescaledb;"
+      when: grimnir_timescaledb_exists.stdout.strip() != "1"
+
+- name: Deploy Grimnir Helm release
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  environment:
+    K8S_AUTH_KUBECONFIG: "{{ grimnir_kubeconfig | default('/home/sauer/.kube/config') }}"
+
+  vars:
+    grimnir_namespace: grimnir
+    grimnir_release_name: grimnir
+    grimnir_chart_ref: oci://ghcr.io/dannysauer/charts/grimnir
+    grimnir_chart_version: ""
+    grimnir_db_host: humpy.home.dannysauer.com
+    grimnir_db_port: 5432
+    grimnir_db_name: grimnir
+    grimnir_db_user: grimnir
+    grimnir_db_password: ""
+    grimnir_freki_hostname: grimnir.home.dannysauer.com
+    grimnir_freki_ingress_class: traefik
+    grimnir_geri_hostname: grimnir-udp.home.dannysauer.com
+    grimnir_metallb_pool: ""
+    grimnir_geri_loadbalancer_ip: ""
+
+  tasks:
+    - name: Validate deploy vars
+      ansible.builtin.assert:
+        that:
+          - grimnir_namespace | length > 0
+          - grimnir_release_name | length > 0
+          - grimnir_chart_ref | length > 0
+          - grimnir_db_host | length > 0
+          - grimnir_db_name | length > 0
+          - grimnir_db_user | length > 0
+          - grimnir_db_password | length > 0
+        fail_msg: "Missing required Grimnir deploy vars"
+
+    - name: Ensure Grimnir namespace exists
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ grimnir_namespace }}"
+
+    - name: Build Grimnir DATABASE_URL
+      ansible.builtin.set_fact:
+        grimnir_database_url: >-
+          postgresql+asyncpg://{{ grimnir_db_user }}:{{ grimnir_db_password }}@{{ grimnir_db_host }}:{{ grimnir_db_port }}/{{ grimnir_db_name }}
+
+    - name: Build Helm values
+      ansible.builtin.set_fact:
+        grimnir_helm_values:
+          image:
+            geri:
+              repository: ghcr.io/dannysauer/grimnir/geri
+            freki:
+              repository: ghcr.io/dannysauer/grimnir/freki
+          database:
+            url: "{{ grimnir_database_url }}"
+          geri:
+            service:
+              type: LoadBalancer
+              annotations: >-
+                {{
+                  ({}
+                   if not grimnir_metallb_pool else
+                   {'metallb.universe.tf/address-pool': grimnir_metallb_pool})
+                  | combine(
+                    {}
+                    if not grimnir_geri_loadbalancer_ip else
+                    {'metallb.universe.tf/loadBalancerIPs': grimnir_geri_loadbalancer_ip}
+                  )
+                  | combine(
+                    {}
+                    if not grimnir_geri_hostname else
+                    {'external-dns.alpha.kubernetes.io/hostname': grimnir_geri_hostname}
+                  )
+                }}
+          freki:
+            ingress:
+              enabled: "{{ grimnir_freki_hostname != '' }}"
+              className: "{{ grimnir_freki_ingress_class }}"
+              annotations: >-
+                {{
+                  {}
+                  if not grimnir_freki_hostname else
+                  {'external-dns.alpha.kubernetes.io/hostname': grimnir_freki_hostname}
+                }}
+              hosts: >-
+                {{
+                  []
+                  if not grimnir_freki_hostname else
+                  [{'host': grimnir_freki_hostname, 'paths': [{'path': '/', 'pathType': 'Prefix'}]}]
+                }}
+              tls: []
+
+    - name: Deploy Grimnir Helm chart
+      kubernetes.core.helm:
+        name: "{{ grimnir_release_name }}"
+        chart_ref: "{{ grimnir_chart_ref }}"
+        chart_version: "{{ grimnir_chart_version | default(omit, true) }}"
+        release_namespace: "{{ grimnir_namespace }}"
+        create_namespace: true
+        wait: true
+        values: "{{ grimnir_helm_values }}"
+
+    - name: Wait for Geri rollout
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ grimnir_release_name }}-geri"
+        namespace: "{{ grimnir_namespace }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+
+    - name: Wait for Freki rollout
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ grimnir_release_name }}-freki"
+        namespace: "{{ grimnir_namespace }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300

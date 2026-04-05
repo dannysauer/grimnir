@@ -39,9 +39,14 @@ jobs:
         run: |
           # Chart versions track separately from app versions via chart-v* tags
           LAST_TAG=$(git tag -l 'chart-v*.*.*' --sort=-version:refname | head -1)
+          APP_VERSION="${{ inputs.app_version }}"
           if [ -z "$LAST_TAG" ]; then
             LAST_TAG="chart-v0.0.0"
             # Always release if no prior chart tag
+            BUMP=patch
+          elif [ -n "$APP_VERSION" ]; then
+            # A new app release should always publish a fresh chart carrying the
+            # updated appVersion, even if the chart templates themselves did not change.
             BUMP=patch
           else
             # Check for chart changes since last chart tag
