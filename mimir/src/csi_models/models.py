@@ -88,9 +88,7 @@ class Label(Base):
         server_default=func.now(),
     )
 
-    __table_args__ = (
-        CheckConstraint("time_end > time_start", name="valid_range"),
-    )
+    __table_args__ = (CheckConstraint("time_end > time_start", name="valid_range"),)
 
 
 class ReceiverHeartbeat(Base):

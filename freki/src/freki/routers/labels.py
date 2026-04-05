@@ -64,9 +64,7 @@ class LabelOut(BaseModel):
 async def list_labels(session: SessionDep, minutes: int = 120):
     cutoff = datetime.now(tz=UTC) - timedelta(minutes=minutes)
     result = await session.execute(
-        select(Label)
-        .where(Label.time_end >= cutoff)
-        .order_by(Label.time_start.desc())
+        select(Label).where(Label.time_end >= cutoff).order_by(Label.time_start.desc())
     )
     return result.scalars().all()
 
