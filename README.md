@@ -60,11 +60,20 @@ authoritative SQL reference and can still be applied manually if needed.
 If the database does not exist and the configured user has `CREATEDB`, the
 startup bootstrap will create it automatically before applying the schema.
 
+Important:
+- The target database must either already have the `timescaledb` extension
+  installed, or the configured database role must be allowed to run
+  `CREATE EXTENSION timescaledb`
+- On PostgreSQL 12 / TimescaleDB 2.11, that typically means a superuser role
+  for fully automatic first boot on a fresh database
+
 Manual bootstrap reference:
 
 ```bash
 psql -U postgres -c "CREATE DATABASE csi;"
-psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme'; GRANT ALL ON DATABASE csi TO csi_user;"
+psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme' CREATEDB;"
+psql -U postgres -c "ALTER USER csi_user WITH SUPERUSER;"
+psql -U postgres -c "GRANT ALL ON DATABASE csi TO csi_user;"
 psql -U postgres -d csi -f mimir/001_schema.sql
 ```
 

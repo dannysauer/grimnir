@@ -19,6 +19,10 @@ imagePullSecrets: []
 database:
   # Connection URL — must use the asyncpg driver prefix:
   #   postgresql+asyncpg://user:password@host:port/dbname
+  # For fully automatic first boot on a fresh database, this role must also
+  # be able to create the TimescaleDB extension (`CREATE EXTENSION timescaledb`).
+  # On PostgreSQL 12 / TimescaleDB 2.11, that typically means a superuser role,
+  # unless the extension is preinstalled in the target database.
   url: ""
   # Optional: reference an existing Secret instead of creating one.
   # The Secret must contain the key specified by database.secretKey.

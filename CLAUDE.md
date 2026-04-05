@@ -260,14 +260,21 @@ run `run_migrations(DATABASE_URL)` at startup (idempotent). `mimir/001_schema.sq
 is the plain-SQL reference of the same schema, and `mimir/src/csi_models/sql/001_schema.sql`
 is bundled into the installed package for first-boot bootstrap.
 
+**Privilege requirement for fully automatic first boot:** the target database
+must either already have the `timescaledb` extension installed, or the
+configured role must be able to run `CREATE EXTENSION timescaledb`. On
+PostgreSQL 12 / TimescaleDB 2.11 that typically means a superuser role.
+
 To bootstrap a fresh database manually:
 ```bash
 psql -U postgres -c "CREATE DATABASE csi;"
-psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme'; GRANT ALL ON DATABASE csi TO csi_user;"
+psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme' CREATEDB;"
+psql -U postgres -c "ALTER USER csi_user WITH SUPERUSER;"
+psql -U postgres -c "GRANT ALL ON DATABASE csi TO csi_user;"
 psql -U postgres -d csi -f mimir/001_schema.sql
 ```
 Or just start a service with `DATABASE_URL` set — the bundled SQL bootstrap will
-create the schema automatically.
+create the schema automatically if the role has the required privileges.
 
 ## UDP Wire Protocol
 
