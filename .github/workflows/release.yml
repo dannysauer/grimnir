@@ -30,25 +30,28 @@ jobs:
           # Find the most recent v*.*.* tag
           LAST_TAG=$(git tag -l 'v*.*.*' --sort=-version:refname | head -1)
           if [ -z "$LAST_TAG" ]; then
-            LAST_TAG="v0.0.0"
+            BASE_VERSION="v0.0.0"
+            RANGE="HEAD"
             COMMITS=$(git log --oneline)
           else
-            COMMITS=$(git log "${LAST_TAG}..HEAD" --oneline)
+            BASE_VERSION="$LAST_TAG"
+            RANGE="${LAST_TAG}..HEAD"
+            COMMITS=$(git log "$RANGE" --oneline)
           fi
 
           if [ -z "$COMMITS" ]; then
-            echo "No commits since $LAST_TAG, skipping release"
+            echo "No commits since $BASE_VERSION, skipping release"
             echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           # Parse semver components
-          MAJOR=$(echo "$LAST_TAG" | sed 's/v\([0-9]*\)\..*/\1/')
-          MINOR=$(echo "$LAST_TAG" | sed 's/v[0-9]*\.\([0-9]*\)\..*/\1/')
-          PATCH=$(echo "$LAST_TAG" | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
+          MAJOR=$(echo "$BASE_VERSION" | sed 's/v\([0-9]*\)\..*/\1/')
+          MINOR=$(echo "$BASE_VERSION" | sed 's/v[0-9]*\.\([0-9]*\)\..*/\1/')
+          PATCH=$(echo "$BASE_VERSION" | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
 
           # Check for breaking changes first
-          FULL_LOG=$(git log "${LAST_TAG}..HEAD" --format="%B---COMMIT_SEP---")
+          FULL_LOG=$(git log "$RANGE" --format="%B---COMMIT_SEP---")
           if echo "$FULL_LOG" | grep -q "BREAKING CHANGE"; then
             MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
           elif echo "$COMMITS" | grep -qE '^\S+ feat(\(.+\))?(!)?:'; then
@@ -56,7 +59,7 @@ jobs:
           elif echo "$COMMITS" | grep -qE '^\S+ (fix|chore)(\(.+\))?(!)?:'; then
             PATCH=$((PATCH + 1))
           else
-            echo "No releasable commits (feat/fix/chore) since $LAST_TAG, skipping"
+            echo "No releasable commits (feat/fix/chore) since $BASE_VERSION, skipping"
             echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -66,7 +69,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           # Build changelog from conventional commits since last tag
-          CHANGELOG=$(git log "${LAST_TAG}..HEAD" --pretty=format:"- %s" \
+          CHANGELOG=$(git log "$RANGE" --pretty=format:"- %s" \
             | grep -E '^- (feat|fix|chore|docs|refactor|perf)' \
             || true)
           # GitHub output multiline escaping
