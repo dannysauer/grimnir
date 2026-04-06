@@ -173,6 +173,7 @@ jobs:
     uses: ./.github/workflows/chart-release.yml
     with:
       app_version: ${{ needs.version.outputs.version }}
+      changelog: ${{ needs.version.outputs.changelog }}
     permissions:
       contents: write
       packages: write
