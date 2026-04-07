@@ -34,3 +34,10 @@
 #define LOG_TAG_WIFI        "CSI_WIFI"
 #define LOG_TAG_CSI         "CSI_DATA"
 #define LOG_TAG_UDP         "CSI_UDP"
+
+// ── Local overrides ───────────────────────────────────────────────────────────
+// Copy config.local.h.example → config.local.h and fill in your values.
+// config.local.h is gitignored and will never be committed.
+#if __has_include("config.local.h")
+#  include "config.local.h"
+#endif

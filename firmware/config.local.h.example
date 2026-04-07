@@ -1,0 +1,22 @@
+// =============================================================================
+// config.local.h.example — Local credential overrides
+//
+// Copy this file to config.local.h and fill in your values.
+// config.local.h is listed in .gitignore and will never be committed.
+//
+// Any define here overrides the placeholder in config.h at compile time.
+// =============================================================================
+
+#pragma once
+
+// ── Wi-Fi ────────────────────────────────────────────────────────────────────
+//#define WIFI_SSID           "YourNetworkSSID"
+//#define WIFI_PASSWORD       "YourNetworkPassword"
+
+// ── Aggregator ───────────────────────────────────────────────────────────────
+//#define AGGREGATOR_HOST     "grimnir-udp.home.example.com"
+
+// ── Receiver name ─────────────────────────────────────────────────────────────
+// Convention: grimnir-<role>-<location>
+// Examples: grimnir-rx-office, grimnir-rx-upstairs, grimnir-tx-living
+//#define RECEIVER_NAME       "grimnir-rx-office"

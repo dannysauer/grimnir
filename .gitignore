@@ -191,6 +191,9 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Firmware local credentials (copy config.local.h.example → config.local.h)
+firmware/config.local.h
+
 # PyPI configuration file
 .pypirc
 

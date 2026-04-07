@@ -37,6 +37,16 @@ repos:
       - id: shellcheck
         args: [--severity=warning]
 
+  # ── Secret / credential detection ────────────────────────────────────────────
+  # Scans for high-entropy strings and common credential patterns.
+  # config.local.h is gitignored, but this catches accidental inline credentials
+  # in committed files (e.g. someone hardcoding a password in config.h).
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+
   # ── GitHub Actions workflow linting ──────────────────────────────────────────
   # actionlint checks workflow YAML syntax and the inline shell scripts
   # within `run:` blocks (delegating to shellcheck where available).
