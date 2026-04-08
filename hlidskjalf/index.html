@@ -160,8 +160,9 @@
     padding: 12px 14px;
     transition: border-color .2s;
   }
-  .rx-card.active { border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
-  .rx-card.stale  { border-color: var(--border); opacity: .6; }
+  .rx-card.active  { border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+  .rx-card.stale   { border-color: var(--border); opacity: .6; }
+  .rx-card.offline { border-color: var(--border); opacity: .4; }
 
   .rx-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
   .rx-name { font-family: var(--mono); font-size: 13px; color: var(--accent); }
@@ -175,8 +176,9 @@
     white-space: nowrap;
     flex-shrink: 0;
   }
-  .rx-pill.live  { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); }
-  .rx-pill.stale { background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
+  .rx-pill.live    { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); }
+  .rx-pill.stale   { background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
+  .rx-pill.offline { background: color-mix(in srgb, var(--dim) 20%, transparent); color: var(--dim); }
 
   .rx-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .stat { display: flex; flex-direction: column; gap: 2px; }
@@ -355,6 +357,38 @@
     z-index: 100;
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Desktop responsive layout ────────────────────────────────────────── */
+  @media (min-width: 768px) {
+    html, body { font-size: 16px; }
+
+    header { padding: 12px 28px; }
+    .logo { font-size: 16px; }
+    .page { padding: 20px 28px; }
+
+    #receiver-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .nav-btn { font-size: 11px; min-height: 60px; }
+    .nav-btn svg { width: 22px; height: 22px; }
+  }
+
+  @media (min-width: 1200px) {
+    .page { padding: 28px max(32px, calc((100% - 1440px) / 2)); }
+
+    #receiver-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+
+    #page-chart.active {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-content: start;
+    }
+    #page-chart .chart-wrap { margin-bottom: 0; }
+  }
 </style>
 </head>
 <body>
@@ -495,8 +529,19 @@ function escHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+function timeAgo(isoStr) {
+  if (!isoStr) return 'never';
+  const s = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60)   return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)   return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
-const receivers = {};        // id → receiver object
+const receivers = {};        // id → merged receiver (history + SSE); _live flag set by SSE
 const rssiHistory = {};      // name → [{x, y}]
 const varHistory = {};       // name → [{x, y}]
 let rssiChart = null;
@@ -504,6 +549,26 @@ let varChart = null;
 let selectedHeatmapRx = null;
 let historyLoaded = false;
 let heatmapTimer = null;
+
+// ── Status helpers ─────────────────────────────────────────────────────────────
+const STALE_MS       = 12_000;
+const OFFLINE_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+
+const isOffline = rx => rx._live === false;
+const isStale   = rx => !isOffline(rx) && (!rx.last_seen || (Date.now() - new Date(rx.last_seen)) > STALE_MS);
+const getStatus = rx => isOffline(rx) ? 'offline' : isStale(rx) ? 'stale' : 'live';
+
+function sortedReceivers() {
+  return Object.values(receivers).sort((a, b) => {
+    const roleRank = r => r.role === 'transmitter' ? 1 : 0;
+    const rd = roleRank(a) - roleRank(b);
+    if (rd !== 0) return rd;
+    const liveRank = r => isOffline(r) ? 1 : 0;
+    const ld = liveRank(a) - liveRank(b);
+    if (ld !== 0) return ld;
+    return (a.name ?? '').localeCompare(b.name ?? '');
+  });
+}
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 function showPage(btn) {
@@ -531,8 +596,10 @@ function connectStream() {
 }
 
 function onStreamUpdate(data) {
+  const liveIds = new Set(data.receivers.map(rx => rx.id));
+
   for (const rx of data.receivers) {
-    receivers[rx.id] = rx;
+    receivers[rx.id] = { ...receivers[rx.id], ...rx, _live: true };
 
     if (!rssiHistory[rx.name]) rssiHistory[rx.name] = [];
     if (!varHistory[rx.name])  varHistory[rx.name]  = [];
@@ -547,10 +614,18 @@ function onStreamUpdate(data) {
     }
   }
 
-  renderCards(data.receivers);
-  updateRxSummary(data.receivers);
+  // Mark receivers not in this update as offline
+  for (const id of Object.keys(receivers)) {
+    if (!liveIds.has(parseInt(id))) {
+      receivers[id] = { ...receivers[id], _live: false };
+    }
+  }
+
+  const sorted = sortedReceivers();
+  renderCards(sorted);
+  updateRxSummary(sorted);
   updateCharts();
-  syncHeatmapSelector(data.receivers);
+  syncHeatmapSelector(sorted);
 
   if (!historyLoaded && data.receivers.length > 0) {
     historyLoaded = true;
@@ -560,7 +635,7 @@ function onStreamUpdate(data) {
 
 // ── Receiver summary (header) ─────────────────────────────────────────────────
 function updateRxSummary(rxList) {
-  const live  = rxList.filter(rx => !isStale(rx)).length;
+  const live  = rxList.filter(rx => getStatus(rx) === 'live').length;
   const total = rxList.length;
   const el = document.getElementById('rx-summary');
   if (total === 0) { el.textContent = ''; return; }
@@ -569,41 +644,41 @@ function updateRxSummary(rxList) {
 }
 
 // ── Receiver cards ────────────────────────────────────────────────────────────
-const STALE_MS = 12_000;
-const isStale = rx => !rx.last_seen || (Date.now() - new Date(rx.last_seen)) > STALE_MS;
-
 function renderCards(rxList) {
   const grid = document.getElementById('receiver-grid');
   if (!rxList.length) { grid.innerHTML = '<div class="empty">no receivers</div>'; return; }
+
+  const emptyEl = grid.querySelector('.empty');
+  if (emptyEl) grid.innerHTML = '';
 
   for (const rx of rxList) {
     let card = document.getElementById(`rxc-${rx.id}`);
     if (!card) {
       card = document.createElement('div');
       card.id = `rxc-${rx.id}`;
-      if (grid.querySelector('.empty')) grid.innerHTML = '';
+      card.className = 'rx-card';
       grid.appendChild(card);
     }
 
-    const stale = isStale(rx);
-    card.className = `rx-card ${stale ? 'stale' : 'active'}`;
+    const status = getStatus(rx);
+    card.className = `rx-card ${status}`;
 
-    const rssi = rx.avg_rssi != null ? rx.avg_rssi.toFixed(1) : '—';
+    const rssi    = rx.avg_rssi != null ? rx.avg_rssi.toFixed(1) : '—';
     const rssiCls = rx.avg_rssi != null ? (rx.avg_rssi > -65 ? 'good' : rx.avg_rssi < -80 ? 'warn' : '') : '';
-    const stddev = rx.stddev_rssi != null ? rx.stddev_rssi.toFixed(2) : '—';
-    const samples = rx.sample_count ?? 0;
-    const varPct = rx.stddev_rssi != null ? Math.min(100, rx.stddev_rssi / 5 * 100) : 0;
-    const seenAgo = rx.last_seen
-      ? Math.round((Date.now() - new Date(rx.last_seen)) / 1000) + 's ago'
-      : 'never';
+    const stddev  = rx.stddev_rssi != null ? rx.stddev_rssi.toFixed(2) : '—';
+    const varPct  = rx.stddev_rssi != null ? Math.min(100, rx.stddev_rssi / 5 * 100) : 0;
+    const seenStr = status === 'offline'
+      ? timeAgo(rx.last_seen)
+      : (rx.last_seen ? Math.round((Date.now() - new Date(rx.last_seen)) / 1000) + 's ago' : 'never');
+    const roleTag = rx.role === 'transmitter' ? ' · tx' : '';
 
     card.innerHTML = `
       <div class="rx-header">
         <div>
           <div class="rx-name">${escHtml(rx.name)}</div>
-          <div class="rx-loc">floor ${escHtml(rx.floor ?? '?')} · ${escHtml(rx.location ?? '—')}</div>
+          <div class="rx-loc">floor ${escHtml(rx.floor ?? '?')} · ${escHtml(rx.location ?? '—')}${roleTag}</div>
         </div>
-        <div class="rx-pill ${stale ? 'stale' : 'live'}">${stale ? 'stale' : 'live'}</div>
+        <div class="rx-pill ${status}">${status}</div>
       </div>
       <div class="rx-stats">
         <div class="stat">
@@ -616,11 +691,23 @@ function renderCards(rxList) {
         </div>
         <div class="stat">
           <div class="stat-label">seen</div>
-          <div class="stat-value" style="font-size:11px">${seenAgo}</div>
+          <div class="stat-value" style="font-size:11px">${seenStr}</div>
         </div>
       </div>
       <div class="rx-bar-wrap"><div class="rx-bar" style="width:${varPct}%"></div></div>
     `;
+  }
+
+  // Re-sort cards in DOM to match sorted rxList (appendChild moves existing nodes)
+  for (const rx of rxList) {
+    const card = document.getElementById(`rxc-${rx.id}`);
+    if (card) grid.appendChild(card);
+  }
+
+  // Remove cards for receivers no longer tracked
+  const ids = new Set(rxList.map(rx => String(rx.id)));
+  for (const card of [...grid.querySelectorAll('.rx-card')]) {
+    if (!ids.has(card.id.replace('rxc-', ''))) card.remove();
   }
 }
 
@@ -715,7 +802,7 @@ function syncHeatmapSelector(rxList) {
     if (!existing.has(String(rx.id))) {
       const opt = document.createElement('option');
       opt.value = rx.id;
-      opt.textContent = rx.name;
+      opt.textContent = isOffline(rx) ? `${rx.name} (offline)` : rx.name;
       sel.appendChild(opt);
     }
   }
@@ -886,8 +973,32 @@ function toast(msg, type = 'ok') {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+// ── Discover all known probes at startup ──────────────────────────────────────
+async function loadAllReceivers() {
+  try {
+    const res = await fetch(`${API}/api/history/receivers`);
+    if (!res.ok) return;
+    const list = await res.json();
+    const cutoff = Date.now() - OFFLINE_DAYS_MS;
+    for (const rx of list) {
+      const lastSeenMs = rx.last_seen ? new Date(rx.last_seen).getTime() : 0;
+      // Include active receivers always; include inactive if seen within 60 days
+      if (rx.active || lastSeenMs > cutoff) {
+        if (!receivers[rx.id]) {
+          receivers[rx.id] = { ...rx, _live: false };
+        }
+      }
+    }
+    const sorted = sortedReceivers();
+    renderCards(sorted);
+    updateRxSummary(sorted);
+    syncHeatmapSelector(sorted);
+  } catch (_) {}
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initCharts();
+loadAllReceivers();
 connectStream();
 loadLabels();
 setInterval(loadLabels, 30_000);
