@@ -1,0 +1,6 @@
+# Muninn (receiver) project-specific Kconfig defaults.
+# Applied when generating a fresh sdkconfig (idf.py set-target).
+# sdkconfig itself is gitignored — commit only this file.
+
+# CSI capture is the core function of this firmware — must be enabled.
+CONFIG_ESP_WIFI_CSI_ENABLED=y

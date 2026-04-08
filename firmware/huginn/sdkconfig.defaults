@@ -1,0 +1,3 @@
+# Huginn (transmitter) project-specific Kconfig defaults.
+# Applied when generating a fresh sdkconfig (idf.py set-target).
+# sdkconfig itself is gitignored — commit only this file.

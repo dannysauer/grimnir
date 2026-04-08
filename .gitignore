@@ -194,6 +194,10 @@ cython_debug/
 # Firmware local credentials (copy config.local.h.example → config.local.h)
 firmware/config.local.h
 
+# ESP-IDF generated build artefacts — commit sdkconfig.defaults, not sdkconfig
+firmware/*/sdkconfig
+firmware/*/build/
+
 # PyPI configuration file
 .pypirc
 
