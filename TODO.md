@@ -43,9 +43,9 @@ as GitHub issues where noted.
       localhost.
       _(#5)_
 
-- [ ] **SQL injection in `labels.py`** — `list_labels` builds a raw SQL
-      `INTERVAL` clause from the user-supplied `minutes` parameter. Replace with
-      a parameterised query or ORM expression.
+- [x] **SQL injection in `labels.py`** — `list_labels` previously built a raw SQL
+      `INTERVAL` clause from the user-supplied `minutes` parameter; replaced with
+      `timedelta(minutes=minutes)` via the ORM.
       _(#6)_
 
 ---

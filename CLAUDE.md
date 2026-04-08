@@ -207,6 +207,38 @@ git subtree pull --prefix=docs/style-guides/google \
   https://github.com/google/styleguide.git gh-pages --squash
 ```
 
+## Commit Messages
+
+**All commits must use Conventional Commits format.** The release workflow
+(`release.yml`) parses commit messages to calculate the next semver version and
+decide whether to cut a release — a commit that doesn't match will silently skip
+the release.
+
+Format: `<type>(<scope>): <description>`
+
+| Type | When to use | Version bump |
+|------|-------------|--------------|
+| `feat` | New user-visible feature | minor |
+| `fix` | Bug fix | patch |
+| `chore` | Maintenance, deps, tooling | patch |
+| `docs` | Documentation only | patch |
+| `refactor` | Refactor with no behaviour change | patch |
+| `perf` | Performance improvement | patch |
+| `test` | Adding or fixing tests | patch |
+| `ci` | CI/CD changes only | patch |
+
+- `BREAKING CHANGE:` in the commit body triggers a major bump.
+- Scope is optional but encouraged (e.g. `feat(hlidskjalf):`, `fix(freki):`).
+- A commit with no matching type (e.g. `hlidskjalf: …`) will **not** trigger a
+  release — always use one of the types above.
+
+Examples:
+```
+feat(hlidskjalf): auto-discover probes from database on load
+fix(freki): remove raw SQL INTERVAL clause in list_labels
+chore(deps): bump pre-commit hooks to latest
+```
+
 ## Pre-Commit
 
 All commits **must** pass pre-commit checks. The hooks run automatically via
@@ -411,7 +443,6 @@ Helm chart supports optional `ServiceMonitor` resources and a Grafana sidecar
 See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 
 - [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
-- [ ] **SQL injection in labels.py** (#6) — `list_labels` builds raw INTERVAL clause
 - [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
 - [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
