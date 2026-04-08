@@ -1,7 +1,7 @@
 repos:
   # ── General file hygiene ─────────────────────────────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -24,7 +24,7 @@ repos:
   # ── Python: ruff (lint + format) ─────────────────────────────────────────────
   # ruff replaces flake8, isort, and black in a single fast tool.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.15.9
     hooks:
       - id: ruff          # linting + auto-fix
         args: [--fix]
@@ -32,7 +32,7 @@ repos:
 
   # ── Shell scripts ────────────────────────────────────────────────────────────
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: [--severity=warning]
@@ -51,7 +51,7 @@ repos:
   # actionlint checks workflow YAML syntax and the inline shell scripts
   # within `run:` blocks (delegating to shellcheck where available).
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.12
     hooks:
       - id: actionlint
 
