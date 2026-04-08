@@ -61,9 +61,9 @@ as GitHub issues where noted.
 
 ## Frontend
 
-- [ ] **Hlidskjalf SSE error handling** — on SSE connection failure the UI only
-      shows a colour change on the status dot; add a visible error banner and
-      auto-reconnect with exponential backoff.
+- [x] **Hlidskjalf SSE error handling** — error banner with countdown now shown
+      on disconnect; auto-reconnects with exponential backoff (1 s → 30 s cap);
+      "reconnect now" button resets the backoff immediately.
       _(#8)_
 
 ---

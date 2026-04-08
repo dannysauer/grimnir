@@ -389,6 +389,33 @@
     }
     #page-chart .chart-wrap { margin-bottom: 0; }
   }
+
+  /* ── SSE error banner ───────────────────────────────────────────────────── */
+  #error-banner {
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 7px 16px;
+    background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+    border-bottom: 1px solid var(--warn);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--warn);
+  }
+  #error-banner.visible { display: flex; }
+  #error-banner button {
+    background: none;
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  #error-banner button:hover { background: color-mix(in srgb, var(--warn) 15%, transparent); }
 </style>
 </head>
 <body>
@@ -404,6 +431,12 @@
       <span id="stream-label">connecting</span>
     </div>
   </header>
+
+  <!-- SSE error banner -->
+  <div id="error-banner">
+    <span id="error-msg">Stream disconnected</span>
+    <button onclick="reconnectNow()">reconnect now</button>
+  </div>
 
   <!-- Pages -->
   <div id="pages">
@@ -579,13 +612,42 @@ function showPage(btn) {
 }
 
 // ── SSE stream ────────────────────────────────────────────────────────────────
-function connectStream() {
-  const es = new EventSource(`${API}/api/stream`);
-  const dot = document.getElementById('stream-dot');
-  const lbl = document.getElementById('stream-label');
+let _sseBackoff = 1000;   // ms; doubles on each failure, caps at 30 s
+let _sseTimer   = null;
+let _sseEs      = null;
 
-  es.onopen = () => { dot.className = 'dot live'; lbl.textContent = 'live'; };
-  es.onerror = () => { dot.className = 'dot error'; lbl.textContent = 'reconnecting…'; };
+function connectStream() {
+  if (_sseTimer) { clearTimeout(_sseTimer); _sseTimer = null; }
+  if (_sseEs)    { _sseEs.close(); _sseEs = null; }
+
+  const dot    = document.getElementById('stream-dot');
+  const lbl    = document.getElementById('stream-label');
+  const banner = document.getElementById('error-banner');
+  const errMsg = document.getElementById('error-msg');
+
+  const es = new EventSource(`${API}/api/stream`);
+  _sseEs = es;
+
+  es.onopen = () => {
+    dot.className = 'dot live';
+    lbl.textContent = 'live';
+    banner.classList.remove('visible');
+    _sseBackoff = 1000;
+  };
+
+  es.onerror = () => {
+    dot.className = 'dot error';
+    es.close();
+    _sseEs = null;
+
+    const secs = Math.round(_sseBackoff / 1000);
+    lbl.textContent = `reconnecting in ${secs}s…`;
+    errMsg.textContent = `Stream disconnected — reconnecting in ${secs}s`;
+    banner.classList.add('visible');
+
+    _sseTimer = setTimeout(connectStream, _sseBackoff);
+    _sseBackoff = Math.min(_sseBackoff * 2, 30000);
+  };
 
   es.onmessage = e => {
     const d = JSON.parse(e.data);
@@ -593,6 +655,11 @@ function connectStream() {
     document.getElementById('last-update').textContent =
       new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
+}
+
+function reconnectNow() {
+  _sseBackoff = 1000;
+  connectStream();
 }
 
 function onStreamUpdate(data) {
