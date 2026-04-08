@@ -108,7 +108,10 @@ async def batch_writer(queue: asyncio.Queue) -> None:
             wall_time, src_ip, pkt = await asyncio.wait_for(queue.get(), timeout=timeout)
         except TimeoutError:
             if batch:
-                await insert_batch(batch)
+                try:
+                    await insert_batch(batch)
+                except Exception as exc:
+                    log.error("batch.insert_failed", count=len(batch), error=str(exc))
                 batch = []
             continue
         except asyncio.CancelledError:
@@ -116,20 +119,31 @@ async def batch_writer(queue: asyncio.Queue) -> None:
                 await insert_batch(batch)
             return
 
-        if pkt.receiver_name not in receiver_cache:
-            receiver_id = await get_or_create_receiver_id(pkt.receiver_name, pkt.transmitter_mac)
-            receiver_cache[pkt.receiver_name] = receiver_id
-        receiver_id = receiver_cache[pkt.receiver_name]
+        try:
+            if pkt.receiver_name not in receiver_cache:
+                receiver_id = await get_or_create_receiver_id(pkt.receiver_name, pkt.transmitter_mac)
+                receiver_cache[pkt.receiver_name] = receiver_id
+            receiver_id = receiver_cache[pkt.receiver_name]
+        except Exception as exc:
+            log.error("receiver.lookup_failed", receiver_name=pkt.receiver_name, error=str(exc))
+            continue
 
         now = asyncio.get_running_loop().time()
         if now - last_heartbeat.get(receiver_id, 0.0) > heartbeat_interval:
-            await upsert_heartbeat(receiver_id, ip_address=src_ip)
-            last_heartbeat[receiver_id] = now
-            receiver_last_seen.labels(receiver_name=pkt.receiver_name).set(time.time())
+            try:
+                await upsert_heartbeat(receiver_id, ip_address=src_ip)
+            except Exception as exc:
+                log.warning("heartbeat.failed", receiver_id=receiver_id, error=str(exc))
+            else:
+                last_heartbeat[receiver_id] = now
+                receiver_last_seen.labels(receiver_name=pkt.receiver_name).set(time.time())
 
         batch.append((wall_time, receiver_id, pkt))
         if len(batch) >= BATCH_SIZE:
-            await insert_batch(batch)
+            try:
+                await insert_batch(batch)
+            except Exception as exc:
+                log.error("batch.insert_failed", count=len(batch), error=str(exc))
             batch = []
 
 
@@ -158,6 +172,12 @@ async def main() -> None:
     )
 
     writer_task = asyncio.create_task(batch_writer(queue))
+
+    def _on_writer_done(task: asyncio.Task) -> None:
+        if not task.cancelled() and (exc := task.exception()):
+            log.error("batch_writer.crashed", error=str(exc))
+
+    writer_task.add_done_callback(_on_writer_done)
     stop_event = asyncio.Event()
 
     def _shutdown(sig, _frame):

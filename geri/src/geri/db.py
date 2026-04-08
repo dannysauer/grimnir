@@ -7,6 +7,7 @@ main.py after migrations have run.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from datetime import UTC, datetime
 
@@ -21,42 +22,51 @@ from .parser import CSIPacket
 log = structlog.get_logger(__name__)
 
 
-async def get_or_create_receiver_id(name: str, mac: str) -> int:
+def _receiver_mac(name: str) -> str:
+    """
+    Derive a stable locally-administered MAC from a receiver name.
+
+    Receiver boards don't include their own MAC in the CSI packet — only the
+    transmitter MAC is present. To satisfy the unique mac constraint on the
+    receivers table without collisions between receivers sharing a transmitter,
+    we generate a deterministic locally-administered MAC from the receiver name.
+    """
+    digest = hashlib.sha256(name.encode()).digest()[:6]
+    # Set locally-administered bit (bit 1), clear multicast bit (bit 0)
+    first_byte = (digest[0] | 0x02) & 0xFE
+    return ":".join(f"{b:02x}" for b in [first_byte, *digest[1:]])
+
+
+async def get_or_create_receiver_id(name: str, transmitter_mac: str) -> int:
     """
     Return the DB id for a receiver by name.
     If not found, auto-register it — admin can fill in floor/location later.
+
+    Note: transmitter_mac is passed for logging context only. The receivers.mac
+    column stores a stable synthetic MAC derived from the receiver name, since
+    the CSI packet format does not carry the receiver's own hardware MAC.
     """
+    mac = _receiver_mac(name)
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(select(Receiver).where(Receiver.name == name))
         receiver = result.scalar_one_or_none()
         if receiver is not None:
-            if receiver.mac != mac:
-                old_mac = receiver.mac
-                receiver.mac = mac
-                await session.commit()
-                log.info(
-                    "receiver.mac_reconciled",
-                    id=receiver.id,
-                    name=name,
-                    old_mac=old_mac,
-                    new_mac=mac,
-                )
             return receiver.id
 
         stmt = (
             pg_insert(Receiver)
             .values(mac=mac, name=name, role="receiver", active=True)
             .on_conflict_do_update(
-                index_elements=["mac"],
-                set_={"name": name},
+                index_elements=["name"],
+                set_={"active": True},
             )
             .returning(Receiver.id)
         )
         result = await session.execute(stmt)
         await session.commit()
         new_id: int = result.scalar_one()
-        log.info("receiver.registered", name=name, mac=mac, id=new_id)
+        log.info("receiver.registered", name=name, transmitter_mac=transmitter_mac, id=new_id)
         return new_id
 
 
