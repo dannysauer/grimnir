@@ -20,3 +20,8 @@
 // Convention: grimnir-<role>-<location>
 // Examples: grimnir-rx-office, grimnir-rx-upstairs, grimnir-tx-living
 //#define RECEIVER_NAME       "grimnir-rx-office"
+
+// ── Huginn transmitter MAC ────────────────────────────────────────────────────
+// CSI frames from all other 802.11 senders are discarded.
+// Read the MAC from idf.py monitor output: "wifi:mode : sta (xx:xx:xx:xx:xx:xx)"
+//#define HUGINN_MAC          {0x1c, 0xdb, 0xd4, 0x78, 0x6a, 0xa4}

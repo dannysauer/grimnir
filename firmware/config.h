@@ -46,6 +46,14 @@
 #  define RECEIVER_NAME       "rx_ground"   // e.g. "grimnir-rx-library", "grimnir-rx-kitchen"
 #endif
 
+// MAC address of the Huginn transmitter board.
+// Muninn will only process CSI from frames sent by this MAC, ignoring all
+// other ambient 802.11 traffic. Set this in config.local.h.
+// Format: {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+#ifndef HUGINN_MAC
+#  define HUGINN_MAC          {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}  // placeholder — set in config.local.h
+#endif
+
 // ── Logging tags ─────────────────────────────────────────────────────────────
 #define LOG_TAG_WIFI        "CSI_WIFI"
 #define LOG_TAG_CSI         "CSI_DATA"

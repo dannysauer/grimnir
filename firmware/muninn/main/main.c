@@ -171,6 +171,10 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info)
 {
     if (!info || !info->buf || info->len == 0) return;
 
+    // Only process CSI from the Huginn transmitter — drop all ambient traffic.
+    static const uint8_t huginn_mac[6] = HUGINN_MAC;
+    if (memcmp(info->mac, huginn_mac, 6) != 0) return;
+
     csi_entry_t entry = {0};
 
     memcpy(entry.tx_mac, info->mac, 6);
