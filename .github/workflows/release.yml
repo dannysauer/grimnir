@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
 
 permissions:
   contents: write       # create releases + tags
@@ -39,29 +47,38 @@ jobs:
             COMMITS=$(git log "$RANGE" --oneline)
           fi
 
-          if [ -z "$COMMITS" ]; then
-            echo "No commits since $BASE_VERSION, skipping release"
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           # Parse semver components
           MAJOR=$(echo "$BASE_VERSION" | sed 's/v\([0-9]*\)\..*/\1/')
           MINOR=$(echo "$BASE_VERSION" | sed 's/v[0-9]*\.\([0-9]*\)\..*/\1/')
           PATCH=$(echo "$BASE_VERSION" | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
 
-          # Check for breaking changes first
-          FULL_LOG=$(git log "$RANGE" --format="%B---COMMIT_SEP---")
-          if echo "$FULL_LOG" | grep -q "BREAKING CHANGE"; then
-            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
-          elif echo "$COMMITS" | grep -qE '^\S+ feat(\(.+\))?(!)?:'; then
-            MINOR=$((MINOR + 1)); PATCH=0
-          elif echo "$COMMITS" | grep -qE '^\S+ (fix|chore)(\(.+\))?(!)?:'; then
-            PATCH=$((PATCH + 1))
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger — use the requested bump type directly
+            case "${{ inputs.bump }}" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
           else
-            echo "No releasable commits (feat/fix/chore) since $BASE_VERSION, skipping"
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            if [ -z "$COMMITS" ]; then
+              echo "No commits since $BASE_VERSION, skipping release"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Check for breaking changes first
+            FULL_LOG=$(git log "$RANGE" --format="%B---COMMIT_SEP---")
+            if echo "$FULL_LOG" | grep -q "BREAKING CHANGE"; then
+              MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+            elif echo "$COMMITS" | grep -qE '^\S+ feat(\(.+\))?(!)?:'; then
+              MINOR=$((MINOR + 1)); PATCH=0
+            elif echo "$COMMITS" | grep -qE '^\S+ (fix|chore)(\(.+\))?(!)?:'; then
+              PATCH=$((PATCH + 1))
+            else
+              echo "No releasable commits (feat/fix/chore) since $BASE_VERSION, skipping"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
 
           VERSION="v${MAJOR}.${MINOR}.${PATCH}"
