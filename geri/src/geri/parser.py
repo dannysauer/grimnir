@@ -29,7 +29,7 @@ import struct
 from dataclasses import dataclass
 
 PACKET_MAGIC = 0x43534921
-HEADER_FORMAT = "<IH16s6shHHHHHI"
+HEADER_FORMAT = "<IH16s6shhHHHHI"  # h=int16 for rssi+noise_floor, H=uint16 elsewhere
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 44 bytes
 
 
