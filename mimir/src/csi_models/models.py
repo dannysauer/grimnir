@@ -91,6 +91,30 @@ class Label(Base):
     __table_args__ = (CheckConstraint("time_end > time_start", name="valid_range"),)
 
 
+class TrainingSample(Base):
+    """Labeled CSI samples copied from csi_samples for long-term ML training storage."""
+
+    __tablename__ = "training_samples"
+
+    time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    receiver_id: Mapped[int] = mapped_column(ForeignKey("receivers.id"), nullable=False)
+    transmitter_mac: Mapped[str] = mapped_column(Text, nullable=False)
+    rssi: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    noise_floor: Mapped[int | None] = mapped_column(SmallInteger)
+    channel: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    bandwidth: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    antenna_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=2)
+    subcarrier_count: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    amplitude: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
+    phase: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
+    raw_bytes: Mapped[bytes | None] = mapped_column(LargeBinary)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __mapper_args__ = {
+        "primary_key": [time, receiver_id],
+    }
+
+
 class ReceiverHeartbeat(Base):
     """Last-seen heartbeat data for a receiver device."""
 
