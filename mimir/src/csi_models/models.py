@@ -71,6 +71,20 @@ class CsiSample(Base):
     }
 
 
+class Room(Base):
+    """Named room for location labeling. Name is the PK so FK references cascade on rename."""
+
+    __tablename__ = "rooms"
+
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    floor: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class Label(Base):
     """Annotated time windows for training labels."""
 
@@ -79,7 +93,11 @@ class Label(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     time_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     time_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    room: Mapped[str] = mapped_column(Text, nullable=False)
+    room: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("rooms.name", onupdate="CASCADE", ondelete="RESTRICT"),
+        nullable=False,
+    )
     occupants: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
