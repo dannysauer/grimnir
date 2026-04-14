@@ -5,7 +5,7 @@ type: application
 
 # Chart version — bumped by the chart-release workflow on every chart change.
 # Follows semver; managed automatically via chart-v* git tags.
-version: 0.1.0
+version: 0.1.1
 
 # Application version — updated by the release workflow to match the container tag.
 appVersion: "0.1.0"

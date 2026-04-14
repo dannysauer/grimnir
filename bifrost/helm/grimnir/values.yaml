@@ -105,6 +105,15 @@ freki:
 
     tls: []
 
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    failureThreshold: 3
+
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
   # Extra environment variables for the freki container.
   env:
     HOST: "0.0.0.0"
