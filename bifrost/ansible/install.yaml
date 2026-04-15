@@ -214,8 +214,7 @@
         chart_version: "{{ grimnir_chart_version | default(omit, true) }}"
         release_namespace: "{{ grimnir_namespace }}"
         create_namespace: true
-        wait: true
-        wait_timeout: 600s
+        wait: false
         values: "{{ grimnir_helm_values }}"
 
     - name: Wait for Geri rollout
