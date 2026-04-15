@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Label Page Preview — Grimnir</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #080c10;
+    --surface:   #0d1520;
+    --surface2:  #111d2e;
+    --border:    #1a2d45;
+    --accent:    #00d4ff;
+    --accent2:   #00ff9d;
+    --warn:      #ff6b35;
+    --dim:       #3a5068;
+    --text:      #c8dff0;
+    --text-dim:  #4a6a88;
+    --mono:      'Share Tech Mono', monospace;
+    --sans:      'Barlow', sans-serif;
+  }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Preview wrapper ──────────────────────────────────────────────────────── */
+  .preview-banner {
+    background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+    border-bottom: 1px solid var(--warn);
+    color: var(--warn);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 16px;
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+
+  .preview-states {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  .preview-state-label {
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 6px 14px;
+    text-transform: uppercase;
+  }
+
+  /* ── Page frame ───────────────────────────────────────────────────────────── */
+  .page-frame {
+    padding: 14px;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  /* ── Section headers ────────────────────────────────────────────────────── */
+  .section-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* ── Sub-tabs ─────────────────────────────────────────────────────────────── */
+  .label-tabs {
+    display: flex;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .label-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 4px;
+    cursor: pointer;
+    transition: color .15s, background .15s;
+    -webkit-tap-highlight-color: transparent;
+    border-right: 1px solid var(--border);
+  }
+  .label-tab:last-child { border-right: none; }
+  .label-tab.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+  }
+
+  /* ── Forms ─────────────────────────────────────────────────────────────────── */
+  .label-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.05em; }
+
+  input[type="text"], input[type="number"], input[type="datetime-local"], textarea, select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    padding: 10px 12px;
+    width: 100%;
+    transition: border-color .15s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 60px; }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 6px;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity .15s;
+    min-height: 48px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { opacity: .8; }
+  .btn.secondary {
+    background: transparent;
+    color: var(--warn);
+    border: 1px solid var(--warn);
+  }
+  .btn.leave-btn {
+    background: var(--accent2);
+    color: var(--bg);
+    font-size: 17px;
+    font-weight: 700;
+    padding: 16px;
+    min-height: 56px;
+    letter-spacing: 0.03em;
+  }
+  .btn.leave-btn:active { opacity: .8; }
+  .btn.enter-btn {
+    background: color-mix(in srgb, var(--accent2) 15%, var(--surface2));
+    color: var(--accent2);
+    border: 1px solid color-mix(in srgb, var(--accent2) 35%, var(--border));
+    font-weight: 600;
+    font-size: 15px;
+    padding: 12px;
+    min-height: 48px;
+  }
+
+  /* Quick-label buttons */
+  .quick-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .quick-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 8px 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color .15s, color .15s;
+    min-height: 44px;
+  }
+  .quick-btn:active, .quick-btn.selected {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .quick-btn.selected-green {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: color-mix(in srgb, var(--accent2) 10%, var(--surface2));
+  }
+
+  /* Floor group labels */
+  .floor-group { margin-bottom: 4px; }
+  .floor-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-left: 2px;
+  }
+
+  /* ── Live tracking: "currently in" state ─────────────────────────────────── */
+  .in-room-card {
+    background: color-mix(in srgb, var(--accent2) 7%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent2) 30%, var(--border));
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .in-room-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .in-room-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent2);
+    box-shadow: 0 0 8px var(--accent2);
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+
+  .in-room-name {
+    font-family: var(--mono);
+    font-size: 18px;
+    color: var(--accent2);
+    flex: 1;
+  }
+
+  .in-room-since {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .in-room-elapsed {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent2);
+    opacity: 0.7;
+  }
+
+  /* ── Label list ────────────────────────────────────────────────────────────── */
+  .label-list { display: flex; flex-direction: column; gap: 8px; }
+  .label-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .label-room { font-family: var(--mono); font-size: 13px; color: var(--accent2); }
+  .label-time { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .label-del {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 16px; padding: 4px; line-height: 1;
+    flex-shrink: 0; min-width: 32px; min-height: 32px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Empty states ────────────────────────────────────────────────────────── */
+  .empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 32px 0;
+  }
+
+  /* ── Tab panel visibility ─────────────────────────────────────────────────── */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="preview-banner">DESIGN PREVIEW — not connected to API — static mock data</div>
+
+<div class="preview-states">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       STATE 1: Live tab — no room selected
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div class="preview-state-label">State 1 · Live tab · no room active</div>
+  <div class="page-frame">
+
+    <div class="label-tabs">
+      <button class="label-tab active" onclick="switchDemo('state1','live')">Live</button>
+      <button class="label-tab" onclick="switchDemo('state1','ts')">Timestamp</button>
+    </div>
+
+    <!-- LIVE panel — idle -->
+    <div class="tab-panel active" id="state1-live">
+      <div class="label-form">
+        <div class="section-title">Enter a Room</div>
+
+        <!-- Floor 0 rooms -->
+        <div class="floor-group">
+          <div class="floor-label">Ground floor</div>
+          <div class="quick-btns">
+            <button class="quick-btn" onclick="selectRoomDemo('state1', this, 'kitchen')">Kitchen</button>
+            <button class="quick-btn" onclick="selectRoomDemo('state1', this, 'living_room')">Living Room</button>
+            <button class="quick-btn" onclick="selectRoomDemo('state1', this, 'hallway')">Hallway</button>
+          </div>
+        </div>
+
+        <!-- Floor 1 rooms -->
+        <div class="floor-group">
+          <div class="floor-label">Upper floor</div>
+          <div class="quick-btns">
+            <button class="quick-btn" onclick="selectRoomDemo('state1', this, 'office')">Office</button>
+            <button class="quick-btn" onclick="selectRoomDemo('state1', this, 'bedroom')">Bedroom</button>
+          </div>
+        </div>
+
+        <!-- Special -->
+        <div class="quick-btns">
+          <button class="quick-btn" onclick="selectRoomDemo('state1', this, 'empty')">Empty / No one</button>
+        </div>
+
+        <div class="field">
+          <label>OCCUPANTS</label>
+          <input type="number" value="1" min="0" max="20">
+        </div>
+
+        <div class="field">
+          <label>NOTES (optional)</label>
+          <textarea placeholder="e.g. watching TV, cooking…"></textarea>
+        </div>
+
+        <button class="btn enter-btn" style="opacity:.45;cursor:default" disabled>
+          Select a room above to enter ↑
+        </button>
+      </div>
+    </div>
+
+    <!-- TIMESTAMP panel -->
+    <div class="tab-panel" id="state1-ts">
+      <div class="label-form">
+        <div class="section-title">New Label</div>
+
+        <div class="field">
+          <label>ROOM</label>
+          <select>
+            <option value="">— select room —</option>
+            <optgroup label="Ground floor">
+              <option>kitchen</option>
+              <option>living_room</option>
+              <option>hallway</option>
+            </optgroup>
+            <optgroup label="Upper floor">
+              <option>office</option>
+              <option>bedroom</option>
+            </optgroup>
+            <option value="empty">empty</option>
+          </select>
+        </div>
+
+        <div class="row-2">
+          <div class="field">
+            <label>START</label>
+            <input type="datetime-local">
+          </div>
+          <div class="field">
+            <label>END</label>
+            <input type="datetime-local">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>OCCUPANTS</label>
+          <input type="number" value="1" min="0" max="20">
+        </div>
+
+        <div class="field">
+          <label>NOTES (optional)</label>
+          <textarea placeholder="e.g. walking, sitting, TV on…"></textarea>
+        </div>
+
+        <div style="display:flex;gap:10px">
+          <button class="quick-btn" style="flex:1">Last 5 min</button>
+          <button class="quick-btn" style="flex:1">Last 15 min</button>
+          <button class="quick-btn" style="flex:1">Last 30 min</button>
+        </div>
+
+        <button class="btn">Save Label</button>
+      </div>
+    </div>
+
+    <div class="section-title">Recent Labels</div>
+    <div class="label-list">
+      <div class="label-item">
+        <div>
+          <div class="label-room">kitchen · 1 occ</div>
+          <div class="label-time">Apr 13  09:14 – 09:42 · making breakfast</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+      <div class="label-item">
+        <div>
+          <div class="label-room">office · 1 occ</div>
+          <div class="label-time">Apr 13  08:30 – 09:10</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       STATE 2: Live tab — room selected, about to enter
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div class="preview-state-label">State 2 · Live tab · room selected, ready to enter</div>
+  <div class="page-frame">
+
+    <div class="label-tabs">
+      <button class="label-tab active">Live</button>
+      <button class="label-tab">Timestamp</button>
+    </div>
+
+    <div class="label-form">
+      <div class="section-title">Enter a Room</div>
+
+      <div class="floor-group">
+        <div class="floor-label">Ground floor</div>
+        <div class="quick-btns">
+          <button class="quick-btn selected-green">Kitchen</button>
+          <button class="quick-btn">Living Room</button>
+          <button class="quick-btn">Hallway</button>
+        </div>
+      </div>
+
+      <div class="floor-group">
+        <div class="floor-label">Upper floor</div>
+        <div class="quick-btns">
+          <button class="quick-btn">Office</button>
+          <button class="quick-btn">Bedroom</button>
+        </div>
+      </div>
+
+      <div class="quick-btns">
+        <button class="quick-btn">Empty / No one</button>
+      </div>
+
+      <div class="field">
+        <label>OCCUPANTS</label>
+        <input type="number" value="1" min="0" max="20">
+      </div>
+
+      <div class="field">
+        <label>NOTES (optional)</label>
+        <textarea placeholder="e.g. watching TV, cooking…"></textarea>
+      </div>
+
+      <button class="btn enter-btn">Enter Kitchen →</button>
+    </div>
+
+    <div class="section-title">Recent Labels</div>
+    <div class="label-list">
+      <div class="label-item">
+        <div>
+          <div class="label-room">kitchen · 1 occ</div>
+          <div class="label-time">Apr 13  09:14 – 09:42 · making breakfast</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       STATE 3: Live tab — currently inside a room
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div class="preview-state-label">State 3 · Live tab · currently inside a room</div>
+  <div class="page-frame">
+
+    <div class="label-tabs">
+      <button class="label-tab active">Live</button>
+      <button class="label-tab">Timestamp</button>
+    </div>
+
+    <!-- "Currently in" card replaces the form -->
+    <div class="in-room-card">
+      <div class="in-room-header">
+        <div class="in-room-dot"></div>
+        <div>
+          <div class="in-room-name">Kitchen</div>
+          <div class="in-room-since">entered 10:23:07 · <span class="in-room-elapsed" id="elapsed-demo">4m 12s</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono)">1 occ</div>
+      </div>
+
+      <div class="field">
+        <label>NOTES (optional)</label>
+        <textarea placeholder="add notes before leaving…"></textarea>
+      </div>
+
+      <button class="btn leave-btn">Leave Room</button>
+      <button class="btn secondary" style="margin-top:-4px">Cancel (discard entry)</button>
+    </div>
+
+    <div class="section-title">Recent Labels</div>
+    <div class="label-list">
+      <div class="label-item">
+        <div>
+          <div class="label-room">office · 1 occ</div>
+          <div class="label-time">Apr 13  10:05 – 10:23</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+      <div class="label-item">
+        <div>
+          <div class="label-room">kitchen · 1 occ</div>
+          <div class="label-time">Apr 13  09:14 – 09:42 · making breakfast</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       STATE 4: Timestamp tab
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div class="preview-state-label">State 4 · Timestamp tab (same as today, rooms from DB)</div>
+  <div class="page-frame">
+
+    <div class="label-tabs">
+      <button class="label-tab">Live</button>
+      <button class="label-tab active">Timestamp</button>
+    </div>
+
+    <div class="label-form">
+      <div class="section-title">New Label</div>
+
+      <div class="field">
+        <label>ROOM</label>
+        <!-- Quick-pick buttons still available for speed -->
+        <div class="quick-btns" style="margin-bottom:6px">
+          <button class="quick-btn selected">Kitchen</button>
+          <button class="quick-btn">Living Room</button>
+          <button class="quick-btn">Office</button>
+          <button class="quick-btn">Bedroom</button>
+          <button class="quick-btn">Hallway</button>
+          <button class="quick-btn">Empty</button>
+        </div>
+        <!-- Fallback free-text if needed -->
+        <input type="text" value="kitchen" placeholder="or type room name…">
+      </div>
+
+      <div class="row-2">
+        <div class="field">
+          <label>START</label>
+          <input type="datetime-local" value="2026-04-13T10:05">
+        </div>
+        <div class="field">
+          <label>END</label>
+          <input type="datetime-local" value="2026-04-13T10:23">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>OCCUPANTS</label>
+        <input type="number" value="1" min="0" max="20">
+      </div>
+
+      <div class="field">
+        <label>NOTES (optional)</label>
+        <textarea placeholder="e.g. walking, sitting, TV on…"></textarea>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="quick-btn" style="flex:1">Last 5 min</button>
+        <button class="quick-btn" style="flex:1">Last 15 min</button>
+        <button class="quick-btn" style="flex:1">Last 30 min</button>
+      </div>
+
+      <button class="btn">Save Label</button>
+    </div>
+
+    <div class="section-title">Recent Labels</div>
+    <div class="label-list">
+      <div class="label-item">
+        <div>
+          <div class="label-room">office · 1 occ</div>
+          <div class="label-time">Apr 13  10:05 – 10:23</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+      <div class="label-item">
+        <div>
+          <div class="label-room">kitchen · 1 occ</div>
+          <div class="label-time">Apr 13  09:14 – 09:42 · making breakfast</div>
+        </div>
+        <button class="label-del">✕</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /preview-states -->
+
+<script>
+'use strict';
+
+// ── Tab switching within a preview state ───────────────────────────────────────
+function switchDemo(stateId, tab) {
+  const frame = document.getElementById(`${stateId}-${tab}`).closest('.page-frame');
+  frame.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  frame.querySelectorAll('.label-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`${stateId}-${tab}`).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Room selection in state 1 demo ─────────────────────────────────────────────
+function selectRoomDemo(stateId, btn, room) {
+  const form = btn.closest('.label-form');
+  form.querySelectorAll('.quick-btn').forEach(b => {
+    b.classList.remove('selected-green');
+  });
+  btn.classList.add('selected-green');
+
+  const enterBtn = form.querySelector('.enter-btn');
+  const label = btn.textContent.trim();
+  enterBtn.textContent = `Enter ${label} →`;
+  enterBtn.disabled = false;
+  enterBtn.style.opacity = '1';
+  enterBtn.style.cursor = 'pointer';
+}
+
+// ── Tick elapsed timer in state 3 ─────────────────────────────────────────────
+(function tickElapsed() {
+  const el = document.getElementById('elapsed-demo');
+  if (!el) return;
+  let totalSec = 4 * 60 + 12;
+  setInterval(() => {
+    totalSec++;
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    el.textContent = `${m}m ${String(s).padStart(2,'0')}s`;
+  }, 1000);
+})();
+</script>
+</body>
+</html>

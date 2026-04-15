@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from .routers import history, labels, stream
+from .routers import history, labels, rooms, stream
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 HOST = os.environ.get("HOST", "0.0.0.0")
@@ -79,6 +79,7 @@ app.add_middleware(
 app.include_router(stream.router, prefix="/api")
 app.include_router(history.router, prefix="/api/history")
 app.include_router(labels.router, prefix="/api/labels")
+app.include_router(rooms.router, prefix="/api/rooms")
 
 # Instrument all HTTP endpoints and expose /metrics.
 # Health and metrics endpoints are excluded from request duration tracking.

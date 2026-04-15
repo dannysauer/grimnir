@@ -330,6 +330,189 @@
   }
   .label-del:active { color: var(--warn); }
 
+  /* ── Label sub-tabs ─────────────────────────────────────────────────────── */
+  .label-tabs {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .label-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 4px;
+    cursor: pointer;
+    transition: color .15s, background .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .label-tab:last-child { border-right: none; }
+  .label-tab.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Room grouping in live tab ──────────────────────────────────────────── */
+  .floor-group { margin-bottom: 10px; }
+  .floor-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-left: 2px;
+  }
+
+  /* ── Live-mode button variants ──────────────────────────────────────────── */
+  .quick-btn.selected-green {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: color-mix(in srgb, var(--accent2) 10%, var(--surface2));
+  }
+  .btn.enter-btn {
+    background: color-mix(in srgb, var(--accent2) 15%, var(--surface2));
+    color: var(--accent2);
+    border: 1px solid color-mix(in srgb, var(--accent2) 35%, var(--border));
+    font-weight: 600;
+  }
+  .btn.enter-btn:disabled {
+    opacity: .4;
+    cursor: default;
+  }
+  .btn.leave-btn {
+    background: var(--accent2);
+    color: var(--bg);
+    font-size: 17px;
+    font-weight: 700;
+    padding: 16px;
+    min-height: 56px;
+  }
+
+  /* ── In-room status card ────────────────────────────────────────────────── */
+  .in-room-card {
+    background: color-mix(in srgb, var(--accent2) 7%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent2) 30%, var(--border));
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .in-room-header { display: flex; align-items: center; gap: 10px; }
+  .in-room-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent2);
+    box-shadow: 0 0 8px var(--accent2);
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+  }
+  .in-room-name { font-family: var(--mono); font-size: 18px; color: var(--accent2); flex: 1; }
+  .in-room-since { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .in-room-occ   { font-family: var(--mono); font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+
+  /* ── Manage-rooms link ──────────────────────────────────────────────────── */
+  .manage-rooms-link {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    padding: 4px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .manage-rooms-link:hover { color: var(--accent); }
+
+  /* ── Room manager modal ─────────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 12, 16, 0.85);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px 12px 0 0;
+    width: 100%;
+    max-width: 480px;
+    max-height: 80dvh;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform .25s ease;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .modal-close {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1;
+  }
+  .modal-close:hover { color: var(--warn); }
+  .modal-body { overflow-y: auto; flex: 1; padding: 12px 16px; }
+  .modal-footer { padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+  /* ── Room manager list items ────────────────────────────────────────────── */
+  .room-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .room-item:last-child { border-bottom: none; }
+  .room-name-display {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent2);
+    flex: 1;
+    cursor: pointer;
+  }
+  .room-name-display:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .room-floor-label { font-family: var(--mono); font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
+  .room-del-btn {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 14px; padding: 4px 6px;
+    min-width: 28px; min-height: 28px; flex-shrink: 0;
+  }
+  .room-del-btn:active { color: var(--warn); }
+
   /* ── Empty states ───────────────────────────────────────────────────────── */
   .empty {
     text-align: center;
@@ -472,56 +655,138 @@
 
     <!-- LABEL page -->
     <div class="page" id="page-label">
-      <div class="label-form">
-        <div class="section-title">New Label</div>
 
-        <div class="field">
-          <label>ROOM</label>
-          <div class="quick-btns" id="quick-btns">
-            <button class="quick-btn" onclick="quickRoom(this,'living_room')">Living Room</button>
-            <button class="quick-btn" onclick="quickRoom(this,'kitchen')">Kitchen</button>
-            <button class="quick-btn" onclick="quickRoom(this,'bedroom')">Bedroom</button>
-            <button class="quick-btn" onclick="quickRoom(this,'office')">Office</button>
-            <button class="quick-btn" onclick="quickRoom(this,'hallway')">Hallway</button>
-            <button class="quick-btn" onclick="quickRoom(this,'empty')">Empty</button>
-          </div>
-          <input type="text" id="label-room" placeholder="or type room name…" style="margin-top:6px;font-size:16px">
-        </div>
-
-        <div class="row-2">
-          <div class="field">
-            <label>START</label>
-            <input type="datetime-local" id="label-start">
-          </div>
-          <div class="field">
-            <label>END</label>
-            <input type="datetime-local" id="label-end">
-          </div>
-        </div>
-
-        <div class="field">
-          <label>OCCUPANTS</label>
-          <input type="number" id="label-occupants" value="1" min="0" max="20">
-        </div>
-
-        <div class="field">
-          <label>NOTES (optional)</label>
-          <textarea id="label-notes" placeholder="e.g. walking, sitting, TV on…"></textarea>
-        </div>
-
-        <div style="display:flex;gap:10px">
-          <button class="quick-btn" style="flex:1" onclick="setLastN(5)">Last 5 min</button>
-          <button class="quick-btn" style="flex:1" onclick="setLastN(15)">Last 15 min</button>
-          <button class="quick-btn" style="flex:1" onclick="setLastN(30)">Last 30 min</button>
-        </div>
-
-        <button class="btn" onclick="submitLabel()">Save Label</button>
+      <!-- Sub-tab bar -->
+      <div class="label-tabs">
+        <button class="label-tab active" id="tab-btn-live" onclick="switchLabelTab('live')">Live</button>
+        <button class="label-tab" id="tab-btn-timestamp" onclick="switchLabelTab('timestamp')">Timestamp</button>
       </div>
 
-      <div class="section-title">Recent Labels</div>
-      <div class="label-list" id="label-list"><div class="empty">no labels yet</div></div>
-    </div>
+      <!-- LIVE panel ──────────────────────────────────────────────────────── -->
+      <div class="tab-panel active" id="tab-live">
 
+        <!-- idle: room selection -->
+        <div id="live-idle">
+          <div class="label-form">
+            <div class="section-title">Enter a Room</div>
+            <div id="live-room-groups"><div class="empty" style="padding:12px 0">loading rooms…</div></div>
+            <div class="field">
+              <label>OCCUPANTS</label>
+              <input type="number" id="live-occupants" value="1" min="0" max="20">
+            </div>
+            <div class="field">
+              <label>NOTES (optional)</label>
+              <textarea id="live-notes-idle" placeholder="e.g. watching TV, cooking…"></textarea>
+            </div>
+            <button class="btn enter-btn" id="live-enter-btn" onclick="enterRoom()" disabled>
+              Select a room above ↑
+            </button>
+          </div>
+        </div>
+
+        <!-- active: in-room card -->
+        <div id="live-active" style="display:none">
+          <div class="in-room-card">
+            <div class="in-room-header">
+              <div class="in-room-dot"></div>
+              <div>
+                <div class="in-room-name" id="live-active-room">—</div>
+                <div class="in-room-since">entered <span id="live-since-time">—</span> · <span id="live-elapsed">0s</span></div>
+              </div>
+              <div class="in-room-occ" id="live-active-occ"></div>
+            </div>
+            <div class="field">
+              <label>NOTES (optional)</label>
+              <textarea id="live-notes-active" placeholder="add notes before leaving…"></textarea>
+            </div>
+            <button class="btn leave-btn" onclick="leaveRoom()">Leave Room</button>
+            <button class="btn secondary" onclick="cancelEntry()">Cancel (discard)</button>
+          </div>
+        </div>
+
+      </div><!-- /tab-live -->
+
+      <!-- TIMESTAMP panel ──────────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tab-timestamp">
+        <div class="label-form">
+          <div class="section-title">New Label</div>
+
+          <div class="field">
+            <label>ROOM</label>
+            <div class="quick-btns" id="ts-room-btns" style="margin-bottom:6px">
+              <!-- populated by loadRooms() -->
+            </div>
+            <select id="ts-room-select" onchange="syncTsRoomBtns(this.value)">
+              <option value="">— select room —</option>
+            </select>
+          </div>
+
+          <div class="row-2">
+            <div class="field">
+              <label>START</label>
+              <input type="datetime-local" id="label-start">
+            </div>
+            <div class="field">
+              <label>END</label>
+              <input type="datetime-local" id="label-end">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>OCCUPANTS</label>
+            <input type="number" id="label-occupants" value="1" min="0" max="20">
+          </div>
+
+          <div class="field">
+            <label>NOTES (optional)</label>
+            <textarea id="label-notes" placeholder="e.g. walking, sitting, TV on…"></textarea>
+          </div>
+
+          <div style="display:flex;gap:10px">
+            <button class="quick-btn" style="flex:1" onclick="setLastN(5)">Last 5 min</button>
+            <button class="quick-btn" style="flex:1" onclick="setLastN(15)">Last 15 min</button>
+            <button class="quick-btn" style="flex:1" onclick="setLastN(30)">Last 30 min</button>
+          </div>
+
+          <button class="btn" onclick="submitLabel()">Save Label</button>
+        </div>
+      </div><!-- /tab-timestamp -->
+
+      <!-- Recent labels header with manage-rooms link -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-title" style="margin-bottom:0">Recent Labels</div>
+        <button class="manage-rooms-link" onclick="openRoomManager()">manage rooms</button>
+      </div>
+      <div class="label-list" id="label-list"><div class="empty">no labels yet</div></div>
+
+    </div><!-- /page-label -->
+
+  </div><!-- /pages -->
+
+  <!-- Room manager modal (position: fixed, sits above everything) -->
+  <div class="modal-overlay" id="room-modal" onclick="if(event.target===this)closeRoomManager()">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Manage Rooms</span>
+        <button class="modal-close" onclick="closeRoomManager()">✕</button>
+      </div>
+      <div class="modal-body" id="room-manager-list"><!-- rendered by JS --></div>
+      <div class="modal-footer">
+        <div class="section-title" style="margin-bottom:8px">Add Room</div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <div style="flex:2">
+            <input type="text" id="new-room-name" placeholder="room name"
+                   onkeydown="if(event.key==='Enter')addRoom()">
+          </div>
+          <div style="flex:1">
+            <input type="number" id="new-room-floor" value="0" min="0" max="99"
+                   title="floor number (0 = ground)">
+          </div>
+          <button class="btn" style="flex:none;width:auto;padding:10px 14px" onclick="addRoom()">Add</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px;font-family:var(--mono)">floor · 0 = ground floor</div>
+      </div>
+    </div>
   </div>
 
   <!-- Nav -->
@@ -940,10 +1205,199 @@ setInterval(() => {
 }, 2000);
 
 // ── Labels ────────────────────────────────────────────────────────────────────
-function quickRoom(btn, room) {
-  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('selected'));
+
+// ── Rooms state ───────────────────────────────────────────────────────────────
+let knownRooms    = [];
+let liveRoom      = null;   // selected room name or null
+let liveEnterTime = null;   // Date when user entered, or null
+let liveElapsedId = null;   // setInterval handle for elapsed ticker
+let _editingRoom  = null;   // room name being renamed in the manager
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchLabelTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.label-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById(`tab-btn-${tab}`).classList.add('active');
+}
+
+// ── Room display helpers ──────────────────────────────────────────────────────
+function displayRoomName(name) {
+  // snake_case → Title Case for button labels (e.g. living_room → Living Room)
+  return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function groupRoomsByFloor(rooms) {
+  const groups = {};
+  for (const r of rooms) {
+    if (!groups[r.floor]) groups[r.floor] = [];
+    groups[r.floor].push(r);
+  }
+  return groups;
+}
+
+function floorLabel(f) {
+  return f === 0 ? 'Ground floor' : f === 1 ? 'Upper floor' : `Floor ${f}`;
+}
+
+// ── Load rooms from API ───────────────────────────────────────────────────────
+async function loadRooms() {
+  try {
+    const res = await fetch(`${API}/api/rooms`);
+    if (!res.ok) return;
+    knownRooms = await res.json();
+  } catch (_) {
+    knownRooms = [];
+  }
+  renderLiveRoomButtons();
+  renderTimestampRoomPicker();
+}
+
+function renderLiveRoomButtons() {
+  const container = document.getElementById('live-room-groups');
+  if (!container) return;
+  if (!knownRooms.length) {
+    container.innerHTML = '<div class="empty" style="padding:12px 0">no rooms — add via manage rooms</div>';
+    return;
+  }
+  const groups = groupRoomsByFloor(knownRooms);
+  container.innerHTML = Object.entries(groups).map(([floor, rooms]) => `
+    <div class="floor-group">
+      <div class="floor-label">${escHtml(floorLabel(parseInt(floor)))}</div>
+      <div class="quick-btns">
+        ${rooms.map(r => `
+          <button class="quick-btn${liveRoom === r.name ? ' selected-green' : ''}"
+                  onclick="selectLiveRoom('${escHtml(r.name)}', this)">
+            ${escHtml(displayRoomName(r.name))}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTimestampRoomPicker() {
+  // Quick buttons
+  const btns = document.getElementById('ts-room-btns');
+  if (btns) {
+    btns.innerHTML = knownRooms.map(r => `
+      <button class="quick-btn" data-room="${escHtml(r.name)}"
+              onclick="quickRoomTs(this,'${escHtml(r.name)}')">
+        ${escHtml(displayRoomName(r.name))}
+      </button>
+    `).join('');
+  }
+  // Select with optgroups per floor
+  const sel = document.getElementById('ts-room-select');
+  if (!sel) return;
+  const current = sel.value;
+  const groups  = groupRoomsByFloor(knownRooms);
+  sel.innerHTML = '<option value="">— select room —</option>' +
+    Object.entries(groups).map(([floor, rooms]) =>
+      `<optgroup label="${escHtml(floorLabel(parseInt(floor)))}">` +
+      rooms.map(r =>
+        `<option value="${escHtml(r.name)}"${r.name === current ? ' selected' : ''}>${escHtml(r.name)}</option>`
+      ).join('') +
+      '</optgroup>'
+    ).join('');
+}
+
+// ── Live mode state machine ───────────────────────────────────────────────────
+function selectLiveRoom(name, _el) {
+  liveRoom = name;
+  renderLiveRoomButtons();   // re-render to show selection highlight
+  const btn = document.getElementById('live-enter-btn');
+  if (btn) {
+    btn.disabled   = false;
+    btn.textContent = `Enter ${displayRoomName(name)} →`;
+  }
+}
+
+function enterRoom() {
+  if (!liveRoom) { toast('Select a room first', 'warn'); return; }
+  liveEnterTime = new Date();
+
+  document.getElementById('live-idle').style.display   = 'none';
+  document.getElementById('live-active').style.display = 'block';
+  document.getElementById('live-active-room').textContent = displayRoomName(liveRoom);
+  document.getElementById('live-since-time').textContent  =
+    liveEnterTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('live-active-occ').textContent  =
+    `${document.getElementById('live-occupants').value} occ`;
+
+  if (liveElapsedId) clearInterval(liveElapsedId);
+  liveElapsedId = setInterval(updateElapsed, 1000);
+  updateElapsed();
+}
+
+function updateElapsed() {
+  if (!liveEnterTime) return;
+  const sec = Math.floor((Date.now() - liveEnterTime) / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const el = document.getElementById('live-elapsed');
+  if (el) el.textContent = m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+
+async function leaveRoom() {
+  if (!liveRoom || !liveEnterTime) return;
+  const time_start = liveEnterTime.toISOString();
+  const time_end   = new Date().toISOString();
+  const occupants  = parseInt(document.getElementById('live-occupants').value, 10) || 1;
+  const notes      = document.getElementById('live-notes-active').value.trim() || null;
+
+  try {
+    const res = await fetch(`${API}/api/labels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room: liveRoom, time_start, time_end, occupants, notes }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast(JSON.stringify(err.detail ?? err), 'warn');
+      return;
+    }
+    toast(`${displayRoomName(liveRoom)} logged`, 'ok');
+    resetLiveState();
+    loadLabels();
+  } catch (_) {
+    toast('Network error', 'warn');
+  }
+}
+
+function cancelEntry() {
+  resetLiveState();
+  toast('Discarded', 'ok');
+}
+
+function resetLiveState() {
+  if (liveElapsedId) { clearInterval(liveElapsedId); liveElapsedId = null; }
+  liveRoom      = null;
+  liveEnterTime = null;
+  const idle   = document.getElementById('live-idle');
+  const active = document.getElementById('live-active');
+  if (idle)   idle.style.display   = '';
+  if (active) active.style.display = 'none';
+  const notesActive = document.getElementById('live-notes-active');
+  const occ         = document.getElementById('live-occupants');
+  const enterBtn    = document.getElementById('live-enter-btn');
+  if (notesActive) notesActive.value = '';
+  if (occ)         occ.value        = '1';
+  if (enterBtn)    { enterBtn.disabled = true; enterBtn.textContent = 'Select a room above ↑'; }
+  renderLiveRoomButtons();
+}
+
+// ── Timestamp tab ─────────────────────────────────────────────────────────────
+function quickRoomTs(btn, room) {
+  document.querySelectorAll('#ts-room-btns .quick-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
-  document.getElementById('label-room').value = room;
+  document.getElementById('ts-room-select').value = room;
+}
+
+function syncTsRoomBtns(value) {
+  document.querySelectorAll('#ts-room-btns .quick-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.room === value);
+  });
 }
 
 function setLastN(minutes) {
@@ -959,7 +1413,7 @@ function toLocalDT(d) {
 }
 
 async function submitLabel() {
-  const room      = document.getElementById('label-room').value.trim();
+  const room      = document.getElementById('ts-room-select').value;
   const startRaw  = document.getElementById('label-start').value;
   const endRaw    = document.getElementById('label-end').value;
   const occupantsRaw = parseInt(document.getElementById('label-occupants').value, 10);
@@ -984,12 +1438,12 @@ async function submitLabel() {
       toast(JSON.stringify(err.detail ?? err), 'warn');
       return;
     }
-    toast(`Label "${room}" saved`, 'ok');
-    document.getElementById('label-room').value = '';
+    toast(`"${displayRoomName(room)}" saved`, 'ok');
     document.getElementById('label-notes').value = '';
-    document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('selected'));
+    document.getElementById('ts-room-select').value = '';
+    document.querySelectorAll('#ts-room-btns .quick-btn').forEach(b => b.classList.remove('selected'));
     loadLabels();
-  } catch (e) {
+  } catch (_) {
     toast('Network error', 'warn');
   }
 }
@@ -998,8 +1452,7 @@ async function loadLabels() {
   try {
     const res = await fetch(`${API}/api/labels?minutes=480`);
     if (!res.ok) return;
-    const labels = await res.json();
-    renderLabels(labels);
+    renderLabels(await res.json());
   } catch (_) {}
 }
 
@@ -1007,13 +1460,13 @@ function renderLabels(labels) {
   const list = document.getElementById('label-list');
   if (!labels.length) { list.innerHTML = '<div class="empty">no labels yet</div>'; return; }
   list.innerHTML = labels.map(l => {
-    const s = new Date(l.time_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const e = new Date(l.time_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const s   = new Date(l.time_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const e   = new Date(l.time_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const day = new Date(l.time_start).toLocaleDateString([], { month: 'short', day: 'numeric' });
     return `
       <div class="label-item">
         <div>
-          <div class="label-room">${escHtml(l.room)} · ${escHtml(l.occupants)} occ</div>
+          <div class="label-room">${escHtml(displayRoomName(l.room))} · ${escHtml(l.occupants)} occ</div>
           <div class="label-time">${escHtml(day)} ${escHtml(s)} – ${escHtml(e)}${l.notes ? ' · ' + escHtml(l.notes) : ''}</div>
         </div>
         <button class="label-del" onclick="deleteLabel(${parseInt(l.id)})" title="Delete">✕</button>
@@ -1027,6 +1480,155 @@ async function deleteLabel(id) {
     const res = await fetch(`${API}/api/labels/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('Label deleted', 'ok'); loadLabels(); }
   } catch (_) {}
+}
+
+// ── Room manager modal ────────────────────────────────────────────────────────
+function openRoomManager() {
+  _editingRoom = null;
+  document.getElementById('room-modal').classList.add('open');
+  loadRoomManager();
+}
+
+function closeRoomManager() {
+  document.getElementById('room-modal').classList.remove('open');
+}
+
+async function loadRoomManager() {
+  try {
+    const res = await fetch(`${API}/api/rooms`);
+    if (!res.ok) return;
+    knownRooms = await res.json();
+  } catch (_) {}
+  renderRoomManager();
+  renderLiveRoomButtons();
+  renderTimestampRoomPicker();
+}
+
+function renderRoomManager() {
+  const list = document.getElementById('room-manager-list');
+  if (!list) return;
+  if (!knownRooms.length) {
+    list.innerHTML = '<div class="empty">no rooms yet — add one below</div>';
+    return;
+  }
+  const groups = groupRoomsByFloor(knownRooms);
+  list.innerHTML = Object.entries(groups).map(([floor, rooms]) => `
+    <div style="margin-bottom:14px">
+      <div class="floor-label">${escHtml(floorLabel(parseInt(floor)))}</div>
+      ${rooms.map(r => {
+        const isEditing = (r.name === _editingRoom);
+        const nameCell = isEditing
+          ? `<input id="room-edit-input" value="${escHtml(r.name)}"
+                    style="flex:1;font-family:var(--mono);font-size:13px;padding:4px 6px;
+                           background:var(--surface2);border:1px solid var(--accent);
+                           border-radius:4px;color:var(--text);min-width:0">
+             <button onclick="saveRoomName('${escHtml(r.name)}')"
+                     style="background:var(--accent);color:var(--bg);border:none;border-radius:4px;
+                            padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+               save
+             </button>
+             <button onclick="cancelEditRoom()"
+                     style="background:none;border:1px solid var(--border);color:var(--text-dim);
+                            border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;flex-shrink:0">
+               ✕
+             </button>`
+          : `<span class="room-name-display" title="click to rename"
+                   onclick="editRoomName('${escHtml(r.name)}')">
+               ${escHtml(r.name)}
+             </span>`;
+        return `
+          <div class="room-item">
+            ${nameCell}
+            <span class="room-floor-label">fl.</span>
+            <input type="number" value="${r.floor}" min="0" max="99"
+                   onchange="updateRoomFloor('${escHtml(r.name)}',this.value)"
+                   style="width:48px;padding:4px 6px;font-family:var(--mono);font-size:13px;
+                          text-align:center;background:var(--surface2);border:1px solid var(--border);
+                          border-radius:4px;color:var(--text)">
+            ${isEditing ? '' : `<button class="room-del-btn" onclick="deleteRoom('${escHtml(r.name)}')">✕</button>`}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `).join('');
+
+  if (_editingRoom) {
+    setTimeout(() => {
+      const inp = document.getElementById('room-edit-input');
+      if (inp) { inp.focus(); inp.select(); }
+    }, 0);
+  }
+}
+
+function editRoomName(name) {
+  _editingRoom = name;
+  renderRoomManager();
+}
+
+function cancelEditRoom() {
+  _editingRoom = null;
+  renderRoomManager();
+}
+
+async function saveRoomName(oldName) {
+  const input = document.getElementById('room-edit-input');
+  if (!input) return;
+  const newName = input.value.trim();
+  if (!newName)          { toast('Name cannot be empty', 'warn'); return; }
+  if (newName === oldName) { cancelEditRoom(); return; }
+
+  try {
+    const res = await fetch(`${API}/api/rooms/${encodeURIComponent(oldName)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    });
+    if (!res.ok) { toast((await res.json()).detail ?? 'Error', 'warn'); return; }
+    toast(`Renamed to "${newName}"`, 'ok');
+    _editingRoom = null;
+    await loadRoomManager();
+  } catch (_) { toast('Network error', 'warn'); }
+}
+
+async function updateRoomFloor(name, floor) {
+  const f = parseInt(floor, 10);
+  if (Number.isNaN(f)) return;
+  try {
+    const res = await fetch(`${API}/api/rooms/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ floor: f }),
+    });
+    if (!res.ok) { toast((await res.json()).detail ?? 'Error', 'warn'); return; }
+    await loadRoomManager();
+  } catch (_) { toast('Network error', 'warn'); }
+}
+
+async function addRoom() {
+  const name  = document.getElementById('new-room-name').value.trim();
+  const floor = parseInt(document.getElementById('new-room-floor').value, 10) || 0;
+  if (!name) { toast('Room name required', 'warn'); return; }
+  try {
+    const res = await fetch(`${API}/api/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, floor }),
+    });
+    if (!res.ok) { toast((await res.json()).detail ?? 'Error', 'warn'); return; }
+    toast(`"${name}" added`, 'ok');
+    document.getElementById('new-room-name').value = '';
+    await loadRoomManager();
+  } catch (_) { toast('Network error', 'warn'); }
+}
+
+async function deleteRoom(name) {
+  try {
+    const res = await fetch(`${API}/api/rooms/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    if (res.status === 409) { toast((await res.json()).detail ?? 'Room in use', 'warn'); return; }
+    if (!res.ok)            { toast('Error deleting room', 'warn'); return; }
+    toast(`"${name}" deleted`, 'ok');
+    await loadRoomManager();
+  } catch (_) { toast('Network error', 'warn'); }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -1067,10 +1669,11 @@ async function loadAllReceivers() {
 initCharts();
 loadAllReceivers();
 connectStream();
+loadRooms();
 loadLabels();
 setInterval(loadLabels, 30_000);
 
-// Pre-fill label end time to now on label page open
+// Pre-fill timestamp tab end time to now when label page is first opened
 document.querySelector('[data-page="page-label"]').addEventListener('click', () => {
   if (!document.getElementById('label-end').value) {
     document.getElementById('label-end').value = toLocalDT(new Date());
