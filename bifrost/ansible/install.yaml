@@ -215,6 +215,7 @@
         release_namespace: "{{ grimnir_namespace }}"
         create_namespace: true
         wait: true
+        wait_timeout: 600
         values: "{{ grimnir_helm_values }}"
 
     - name: Wait for Geri rollout
