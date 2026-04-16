@@ -14,6 +14,7 @@ from csi_models import CsiSample, Label
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from ..db import SessionDep
 
@@ -79,7 +80,14 @@ async def create_label(body: LabelCreate, session: SessionDep):
         notes=body.notes,
     )
     session.add(label)
-    await session.flush()  # get label.id before backfill
+    try:
+        await session.flush()  # get label.id before backfill
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail=f"Room '{body.room}' does not exist — add it via manage rooms first",
+        )
 
     # Backfill csi_samples.label for this time window
     await session.execute(

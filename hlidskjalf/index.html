@@ -1353,15 +1353,18 @@ async function leaveRoom() {
       body: JSON.stringify({ room: liveRoom, time_start, time_end, occupants, notes }),
     });
     if (!res.ok) {
-      const err = await res.json();
-      toast(JSON.stringify(err.detail ?? err), 'warn');
+      const body = await res.text();
+      let detail;
+      try { detail = JSON.parse(body).detail; } catch (_) { detail = body || `HTTP ${res.status}`; }
+      toast(detail ?? `HTTP ${res.status}`, 'warn');
       return;
     }
     toast(`${displayRoomName(liveRoom)} logged`, 'ok');
     resetLiveState();
     loadLabels();
-  } catch (_) {
-    toast('Network error', 'warn');
+  } catch (e) {
+    console.error('leaveRoom:', e);
+    toast(e.message ?? 'Network error', 'warn');
   }
 }
 
@@ -1434,8 +1437,10 @@ async function submitLabel() {
       body: JSON.stringify({ room, time_start, time_end, occupants, notes }),
     });
     if (!res.ok) {
-      const err = await res.json();
-      toast(JSON.stringify(err.detail ?? err), 'warn');
+      const body = await res.text();
+      let detail;
+      try { detail = JSON.parse(body).detail; } catch (_) { detail = body || `HTTP ${res.status}`; }
+      toast(detail ?? `HTTP ${res.status}`, 'warn');
       return;
     }
     toast(`"${displayRoomName(room)}" saved`, 'ok');
@@ -1443,8 +1448,9 @@ async function submitLabel() {
     document.getElementById('ts-room-select').value = '';
     document.querySelectorAll('#ts-room-btns .quick-btn').forEach(b => b.classList.remove('selected'));
     loadLabels();
-  } catch (_) {
-    toast('Network error', 'warn');
+  } catch (e) {
+    console.error('submitLabel:', e);
+    toast(e.message ?? 'Network error', 'warn');
   }
 }
 
