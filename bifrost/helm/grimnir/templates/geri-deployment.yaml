@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/component: geri
 spec:
   replicas: {{ .Values.geri.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "grimnir.selectorLabels" (merge (dict "component" "geri") .) | nindent 6 }}

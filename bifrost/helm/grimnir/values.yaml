@@ -15,6 +15,10 @@ image:
 
 imagePullSecrets: []
 
+# -- Number of old ReplicaSets to retain for rollback. Kubernetes default is 10;
+# 3 is sufficient for most deployments and avoids accumulation on active clusters.
+revisionHistoryLimit: 3
+
 # -- Database connection (required)
 database:
   # Connection URL — must use the asyncpg driver prefix:
