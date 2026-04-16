@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from csi_models import CsiSample, Label
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from ..db import SessionDep
@@ -99,6 +99,20 @@ async def create_label(body: LabelCreate, session: SessionDep):
         .values(label=body.room)
     )
 
+    # Bulk-sync labeled rows to training_samples (single INSERT, not per-row trigger)
+    await session.execute(
+        text("""
+            INSERT INTO training_samples
+            SELECT time, receiver_id, transmitter_mac, rssi, noise_floor,
+                   channel, bandwidth, antenna_count, subcarrier_count,
+                   amplitude, phase, raw_bytes, label
+            FROM csi_samples
+            WHERE time >= :start AND time < :end AND label IS NOT NULL
+            ON CONFLICT (time, receiver_id) DO UPDATE SET label = EXCLUDED.label
+        """),
+        {"start": body.time_start, "end": body.time_end},
+    )
+
     await session.commit()
     await session.refresh(label)
     return label
@@ -145,5 +159,24 @@ async def delete_label(label_id: int, session: SessionDep):
             )
             .values(label=overlapping_label.room)
         )
+
+    # Sync training_samples: clear the deleted window, then re-add whatever
+    # survived (from overlapping labels re-applied to csi_samples above).
+    await session.execute(
+        text("DELETE FROM training_samples WHERE time >= :start AND time < :end"),
+        {"start": label.time_start, "end": label.time_end},
+    )
+    await session.execute(
+        text("""
+            INSERT INTO training_samples
+            SELECT time, receiver_id, transmitter_mac, rssi, noise_floor,
+                   channel, bandwidth, antenna_count, subcarrier_count,
+                   amplitude, phase, raw_bytes, label
+            FROM csi_samples
+            WHERE time >= :start AND time < :end AND label IS NOT NULL
+            ON CONFLICT (time, receiver_id) DO UPDATE SET label = EXCLUDED.label
+        """),
+        {"start": label.time_start, "end": label.time_end},
+    )
 
     await session.commit()
