@@ -38,28 +38,6 @@ INSERT INTO receivers (mac, name, role, floor, location) VALUES
 ON CONFLICT (mac) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- Rooms
--- Known rooms for location labeling. Name is the primary key so that FK
--- references in labels cascade automatically on rename (ON UPDATE CASCADE).
--- Future attributes (description, colour, etc.) can be added here.
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS rooms (
-    name        TEXT        PRIMARY KEY,
-    floor       SMALLINT    NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Seed common defaults — skipped if already present.
-INSERT INTO rooms (name, floor) VALUES
-    ('kitchen',     0),
-    ('living_room', 0),
-    ('hallway',     0),
-    ('office',      1),
-    ('bedroom',     1),
-    ('empty',       0)
-ON CONFLICT (name) DO NOTHING;
-
--- -----------------------------------------------------------------------------
 -- CSI Samples (hypertable — partitioned by time via TimescaleDB)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS csi_samples (
@@ -144,27 +122,6 @@ CREATE TABLE IF NOT EXISTS labels (
 
 CREATE INDEX IF NOT EXISTS idx_labels_range
     ON labels USING GIST (tstzrange(time_start, time_end));
-
--- Populate rooms from any existing labels (floor 0 by default; edit via room
--- manager UI after the fact).  Must run after labels table is created.
-INSERT INTO rooms (name)
-SELECT DISTINCT room FROM labels
-ON CONFLICT (name) DO NOTHING;
-
--- Add FK from labels.room → rooms.name with cascade-on-rename semantics.
--- Wrapped in a DO block so the migration is idempotent.
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'labels_room_fkey'
-    ) THEN
-        ALTER TABLE labels
-            ADD CONSTRAINT labels_room_fkey
-            FOREIGN KEY (room) REFERENCES rooms(name)
-            ON UPDATE CASCADE
-            ON DELETE RESTRICT;
-    END IF;
-END $$;
 
 -- -----------------------------------------------------------------------------
 -- Receiver heartbeats — track when each device last checked in
