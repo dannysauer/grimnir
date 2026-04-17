@@ -6,6 +6,8 @@
 --
 -- The trigger is dropped here; the application layer (create_label /
 -- delete_label in freki) now performs the sync as a single bulk INSERT/DELETE.
+-- The backing function sync_training_sample() is intentionally left in place
+-- because freki does not own it (it was created by the DB superuser) and the
+-- orphaned function is harmless once the trigger is gone.
 
 DROP TRIGGER IF EXISTS trg_sync_training_sample ON csi_samples;
-DROP FUNCTION IF EXISTS sync_training_sample();
