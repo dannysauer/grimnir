@@ -66,6 +66,63 @@ services:
       geri:
         condition: service_started
 
+  # Nornir — ML training daemon. Polls Freki for queued training jobs,
+  # trains scikit-learn models, and uploads results. No direct DB access needed.
+  #
+  # Run multiple Nornir instances on different machines by setting a unique
+  # NORNIR_NAME for each and pointing them at the same FREKI_URL.
+  nornir:
+    build:
+      context: ..
+      dockerfile: nornir/Dockerfile
+    image: grimnir/nornir:latest
+    restart: unless-stopped
+    environment:
+      FREKI_URL:                "http://freki:8000"
+      DAEMON_NAME:              ${NORNIR_NAME:-nornir-local}
+      HEARTBEAT_INTERVAL_S:     "30"
+      JOB_HEARTBEAT_INTERVAL_S: "10"
+      LOG_LEVEL:                "info"
+    # ── GPU support ────────────────────────────────────────────────────────────
+    # Uncomment the deploy section below to enable GPU access.
+    # Requires nvidia-container-toolkit installed on the host:
+    #   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1             # or "all" to expose all GPUs
+    #           capabilities: [gpu]
+    networks:
+      - grimnir-internal
+    depends_on:
+      freki:
+        condition: service_healthy
+
+  # Völva — inference service. Subscribes to Freki's live CSI stream, applies
+  # the active model, and exposes room occupancy predictions via REST and SSE.
+  # Home Assistant REST sensor: http://<host>:8002/api/predictions/current
+  volva:
+    build:
+      context: ..
+      dockerfile: volva/Dockerfile
+    image: grimnir/volva:latest
+    restart: unless-stopped
+    environment:
+      FREKI_URL:             "http://freki:8000"
+      HOST:                  "0.0.0.0"
+      PORT:                  "8002"
+      MODEL_POLL_INTERVAL_S: "60"
+      LOG_LEVEL:             "info"
+    ports:
+      - "8002:8002"
+    networks:
+      - grimnir-internal
+    depends_on:
+      freki:
+        condition: service_healthy
+
 networks:
   grimnir-internal:
     driver: bridge

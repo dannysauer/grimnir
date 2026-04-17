@@ -1,0 +1,65 @@
+{{- if .Values.volva.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-volva" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: volva
+spec:
+  replicas: {{ .Values.volva.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "grimnir.selectorLabels" (merge (dict "component" "volva") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "grimnir.selectorLabels" (merge (dict "component" "volva") .) | nindent 8 }}
+        app.kubernetes.io/component: volva
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: volva
+          image: {{ include "grimnir.volva.image" . }}
+          imagePullPolicy: {{ .Values.image.volva.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.volva.service.port }}
+              protocol: TCP
+          env:
+            - name: FREKI_URL
+              value: {{ printf "http://%s-freki:%d" (include "grimnir.fullname" .) (.Values.freki.service.port | int) | quote }}
+            - name: PORT
+              value: {{ .Values.volva.service.port | toString | quote }}
+            {{- range $k, $v := .Values.volva.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.volva.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.volva.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.volva.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.volva.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.volva.readinessProbe.periodSeconds }}
+          {{- with .Values.volva.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+{{- end }}

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "volva"
+version = "0.1.0"
+description = "Grimnir inference service — applies active ML model to live CSI data"
+requires-python = ">=3.12"
+dependencies = [
+    "csi-models",
+    "fastapi==0.115.6",
+    "uvicorn==0.32.1",
+    "httpx==0.28.1",
+    "numpy==2.2.1",
+    "scikit-learn==1.6.1",
+    "joblib==1.4.2",
+    "structlog==24.4.0",
+]
+
+[project.scripts]
+volva = "volva.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volva"]

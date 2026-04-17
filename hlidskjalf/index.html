@@ -599,6 +599,90 @@
     cursor: pointer;
   }
   #error-banner button:hover { background: color-mix(in srgb, var(--warn) 15%, transparent); }
+
+  /* ── Training / Models pages ────────────────────────────────────────────── */
+  .ml-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .ml-card-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .ml-card-name { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  .ml-card-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+  .status-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .status-pill.queued    { background: color-mix(in srgb, var(--dim) 20%, transparent); color: var(--dim); }
+  .status-pill.running   { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .status-pill.complete  { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); }
+  .status-pill.failed    { background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
+  .status-pill.cancelled { background: color-mix(in srgb, var(--dim) 15%, transparent); color: var(--text-dim); }
+  .status-pill.active    { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); }
+  .status-pill.online    { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); }
+  .status-pill.offline   { background: color-mix(in srgb, var(--dim) 20%, transparent); color: var(--dim); }
+
+  .ml-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ml-detail {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    word-break: break-all;
+    display: none;
+  }
+  .ml-detail.open { display: block; }
+
+  .ml-expand-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  .ml-expand-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .activate-btn {
+    background: none;
+    border: 1px solid var(--accent2);
+    border-radius: 4px;
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .activate-btn:hover { background: color-mix(in srgb, var(--accent2) 10%, transparent); }
+
+  select[multiple] {
+    height: 90px;
+    padding: 6px;
+  }
+  select[multiple] option { padding: 4px 6px; }
 </style>
 </head>
 <body>
@@ -761,6 +845,54 @@
 
     </div><!-- /page-label -->
 
+    <!-- TRAINING page -->
+    <div class="page" id="page-training">
+
+      <div class="section-title">Training Daemons</div>
+      <div id="daemon-list"><div class="empty">loading…</div></div>
+
+      <div class="section-title" style="margin-top:16px">Job Queue</div>
+      <div id="job-list"><div class="empty">loading…</div></div>
+
+      <div class="section-title" style="margin-top:16px">New Training Job</div>
+      <div class="ml-form">
+        <div class="field">
+          <label>MODEL TYPE</label>
+          <select id="job-model-type">
+            <option value="random_forest">Random Forest</option>
+          </select>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label>TRAIN FROM</label>
+            <input type="datetime-local" id="job-time-start">
+          </div>
+          <div class="field">
+            <label>TRAIN TO</label>
+            <input type="datetime-local" id="job-time-end">
+          </div>
+        </div>
+        <div class="field">
+          <label>ROOMS (ctrl/cmd+click for multiple)</label>
+          <select id="job-rooms" multiple></select>
+        </div>
+        <div class="field">
+          <label>ESTIMATORS</label>
+          <input type="number" id="job-n-estimators" value="100" min="10" max="1000">
+        </div>
+        <button class="btn" onclick="submitTrainingJob()">Queue Job</button>
+      </div>
+
+    </div><!-- /page-training -->
+
+    <!-- MODELS page -->
+    <div class="page" id="page-models">
+
+      <div class="section-title">Trained Models</div>
+      <div id="model-list"><div class="empty">loading…</div></div>
+
+    </div><!-- /page-models -->
+
   </div><!-- /pages -->
 
   <!-- Room manager modal (position: fixed, sits above everything) -->
@@ -806,6 +938,14 @@
     <button class="nav-btn" data-page="page-label" onclick="showPage(this)">
       <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
       Label
+    </button>
+    <button class="nav-btn" data-page="page-training" onclick="showPage(this);loadTrainingPage()">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+      Train
+    </button>
+    <button class="nav-btn" data-page="page-models" onclick="showPage(this);loadModelsPage()">
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      Models
     </button>
   </nav>
 </div>
@@ -1671,6 +1811,158 @@ async function loadAllReceivers() {
   } catch (_) {}
 }
 
+// ── Training page ─────────────────────────────────────────────────────────────
+
+const DAEMON_STALE_MS = 90_000; // 3× default 30 s heartbeat
+
+function daemonStatus(d) {
+  return (Date.now() - new Date(d.last_seen)) < DAEMON_STALE_MS ? 'online' : 'offline';
+}
+
+function renderDaemons(daemons) {
+  const el = document.getElementById('daemon-list');
+  if (!daemons.length) { el.innerHTML = '<div class="empty">no daemons registered</div>'; return; }
+  el.innerHTML = daemons.map(d => {
+    const st = daemonStatus(d);
+    const caps = d.capabilities || {};
+    const gpus = (caps.gpu || []).map(g => g.name).join(', ') || '—';
+    const cpu  = caps.cpu ? `${caps.cpu.cores}c` : '—';
+    return `<div class="ml-card">
+      <div class="ml-card-header">
+        <div>
+          <div class="ml-card-name">${escHtml(d.name)}</div>
+          <div class="ml-card-meta">${escHtml(d.host)} · cpu ${escHtml(cpu)} · gpu ${escHtml(gpus)} · ${timeAgo(d.last_seen)}</div>
+        </div>
+        <span class="status-pill ${st}">${st}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderJobs(jobs) {
+  const el = document.getElementById('job-list');
+  if (!jobs.length) { el.innerHTML = '<div class="empty">no jobs yet</div>'; return; }
+  el.innerHTML = jobs.slice(0, 20).map(j => {
+    const spec = j.spec || {};
+    const summary = `${escHtml(spec.model_type || '?')} · ${escHtml((spec.rooms || []).join(', ') || 'all rooms')}`;
+    const time = j.completed_at ? timeAgo(j.completed_at) : j.claimed_at ? `started ${timeAgo(j.claimed_at)}` : timeAgo(j.created_at);
+    return `<div class="ml-card">
+      <div class="ml-card-header">
+        <div>
+          <div class="ml-card-meta" style="color:var(--text)">${summary}</div>
+          <div class="ml-card-meta">#${j.id} · ${escHtml(time)}${j.error ? ' · <span style="color:var(--warn)">' + escHtml(j.error.slice(0,80)) + '</span>' : ''}</div>
+        </div>
+        <span class="status-pill ${escHtml(j.status)}">${escHtml(j.status)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadTrainingPage() {
+  try {
+    const [dr, jr] = await Promise.all([
+      fetch(`${API}/api/training-daemons`),
+      fetch(`${API}/api/training-jobs`),
+    ]);
+    if (dr.ok) renderDaemons(await dr.json());
+    if (jr.ok) renderJobs(await jr.json());
+  } catch (_) { toast('Failed to load training data', 'warn'); }
+
+  // Populate room selector
+  try {
+    const rr = await fetch(`${API}/api/rooms`);
+    if (rr.ok) {
+      const rooms = await rr.json();
+      const sel = document.getElementById('job-rooms');
+      sel.innerHTML = rooms.map(r => `<option value="${escHtml(r.name)}">${escHtml(r.name)}</option>`).join('');
+    }
+  } catch (_) {}
+}
+
+async function submitTrainingJob() {
+  const modelType = document.getElementById('job-model-type').value;
+  const timeStart = document.getElementById('job-time-start').value;
+  const timeEnd   = document.getElementById('job-time-end').value;
+  const nEst      = parseInt(document.getElementById('job-n-estimators').value, 10) || 100;
+  const roomSel   = document.getElementById('job-rooms');
+  const rooms     = [...roomSel.selectedOptions].map(o => o.value);
+
+  if (!timeStart || !timeEnd) { toast('Start and end time required', 'warn'); return; }
+  if (new Date(timeStart) >= new Date(timeEnd)) { toast('End must be after start', 'warn'); return; }
+
+  const spec = {
+    model_type: modelType,
+    hyperparams: { n_estimators: nEst },
+    feature_config: { use_phase: false, stat_fns: ['mean', 'var'] },
+    time_start: new Date(timeStart).toISOString(),
+    time_end: new Date(timeEnd).toISOString(),
+    rooms: rooms.length ? rooms : null,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/training-jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec }),
+    });
+    if (!res.ok) { toast('Failed to queue job', 'warn'); return; }
+    toast('Training job queued', 'ok');
+    await loadTrainingPage();
+  } catch (_) { toast('Network error', 'warn'); }
+}
+
+// ── Models page ───────────────────────────────────────────────────────────────
+
+function renderModels(models) {
+  const el = document.getElementById('model-list');
+  if (!models.length) { el.innerHTML = '<div class="empty">no models yet</div>'; return; }
+  el.innerHTML = models.map(m => {
+    const acc  = m.metrics?.accuracy != null ? `acc ${(m.metrics.accuracy * 100).toFixed(1)}%` : '';
+    const n    = m.metrics?.n_samples != null ? `${m.metrics.n_samples} samples` : '';
+    const rooms = (m.metrics?.rooms || []).join(', ');
+    const meta = [acc, n, rooms].filter(Boolean).join(' · ');
+    const detailId = `model-detail-${m.id}`;
+    const detailJson = JSON.stringify({ metrics: m.metrics, feature_config: m.feature_config }, null, 2);
+    return `<div class="ml-card">
+      <div class="ml-card-header">
+        <div>
+          <div class="ml-card-name">${escHtml(m.name)}</div>
+          <div class="ml-card-meta">#${m.id} · ${timeAgo(m.created_at)}${meta ? ' · ' + escHtml(meta) : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          ${m.is_active
+            ? '<span class="status-pill active">active</span>'
+            : `<button class="activate-btn" onclick="activateModel(${m.id})">Activate</button>`}
+          <button class="ml-expand-btn" onclick="toggleDetail('${detailId}', this)">details</button>
+        </div>
+      </div>
+      <div class="ml-detail" id="${detailId}">${escHtml(detailJson)}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(id, btn) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+  btn.textContent = el.classList.contains('open') ? 'hide' : 'details';
+}
+
+async function loadModelsPage() {
+  try {
+    const res = await fetch(`${API}/api/models`);
+    if (res.ok) renderModels(await res.json());
+  } catch (_) { toast('Failed to load models', 'warn'); }
+}
+
+async function activateModel(id) {
+  try {
+    const res = await fetch(`${API}/api/models/${id}/activate`, { method: 'POST' });
+    if (!res.ok) { toast('Failed to activate model', 'warn'); return; }
+    toast('Model activated', 'ok');
+    await loadModelsPage();
+  } catch (_) { toast('Network error', 'warn'); }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initCharts();
 loadAllReceivers();
@@ -1683,6 +1975,13 @@ setInterval(loadLabels, 30_000);
 document.querySelector('[data-page="page-label"]').addEventListener('click', () => {
   if (!document.getElementById('label-end').value) {
     document.getElementById('label-end').value = toLocalDT(new Date());
+  }
+});
+
+// Pre-fill training job end time when training page is opened
+document.querySelector('[data-page="page-training"]').addEventListener('click', () => {
+  if (!document.getElementById('job-time-end').value) {
+    document.getElementById('job-time-end').value = toLocalDT(new Date());
   }
 });
 </script>

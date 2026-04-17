@@ -79,8 +79,19 @@ as GitHub issues where noted.
 
 ## ML Pipeline
 
-- [ ] **ML training pipeline** — training data is collected via the Label tab;
-      no training code exists yet. GPU machines (Tesla P100) are available.
-      Start with classical features (mean/variance per subcarrier) before deep
-      learning.
-      _(#9)_
+- [ ] **ML training pipeline** — implementation tracked by issues #16–21 (see #9
+      for overview). Infrastructure complete; awaiting labeled training data.
+      _(#9, #16, #17, #18, #19, #20, #21)_
+
+- [ ] **Mimir schema migration** — `training_daemons`, `training_jobs`, and
+      `trained_models` tables added to SQL bootstrap; apply to production DB on
+      next Freki startup (idempotent).
+      _(#16)_
+
+- [ ] **Phase calibration** — amplitude-only model first; add phase after
+      validating accuracy. See calibration approach in conversation history.
+      _(#7)_
+
+- [ ] **Per-species pet tracking** — `pet_count` column planned for `labels`
+      table; deferred until human-count model is validated.
+      _(#14)_

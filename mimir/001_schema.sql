@@ -133,3 +133,59 @@ CREATE TABLE IF NOT EXISTS receiver_heartbeats (
     firmware_version TEXT,
     PRIMARY KEY (receiver_id)
 );
+
+-- -----------------------------------------------------------------------------
+-- Training daemons — Nornir daemon registry (mirrors receiver heartbeat pattern)
+-- capabilities: {"gpu": [{"name": "Tesla P100", "vram_mb": 16384}], "cpu": {...}}
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS training_daemons (
+    id           SERIAL      PRIMARY KEY,
+    name         TEXT        NOT NULL UNIQUE,
+    host         TEXT        NOT NULL,
+    ip_address   INET,
+    capabilities JSONB       NOT NULL DEFAULT '{}',
+    last_seen    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- -----------------------------------------------------------------------------
+-- Training jobs — job queue for Nornir training runs
+-- spec: {"model_type": "random_forest", "hyperparams": {...},
+--        "feature_config": {...}, "time_start": "...", "time_end": "...",
+--        "rooms": [...]}
+-- heartbeat_at is updated during training for orphan detection.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS training_jobs (
+    id           SERIAL      PRIMARY KEY,
+    status       TEXT        NOT NULL DEFAULT 'queued'
+                 CHECK (status IN ('queued','running','failed','complete','cancelled')),
+    spec         JSONB       NOT NULL,
+    daemon_id    INTEGER     REFERENCES training_daemons(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    claimed_at   TIMESTAMPTZ,
+    heartbeat_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    error        TEXT
+);
+
+-- -----------------------------------------------------------------------------
+-- Trained models — model registry with bytea storage (PV/object store later)
+-- metrics: {"accuracy": 0.87, "confusion_matrix": [...], "n_samples": 4200,
+--           "train_start": "...", "train_end": "...", "rooms": [...]}
+-- feature_config: mirrors spec.feature_config; validated by Völva on model load.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trained_models (
+    id              SERIAL  PRIMARY KEY,
+    name            TEXT    NOT NULL,
+    training_job_id INTEGER REFERENCES training_jobs(id) ON DELETE SET NULL,
+    is_active       BOOLEAN NOT NULL DEFAULT FALSE,
+    metrics         JSONB   NOT NULL DEFAULT '{}',
+    feature_config  JSONB   NOT NULL DEFAULT '{}',
+    model_data      BYTEA   NOT NULL,
+    size_bytes      INTEGER NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enforce at most one active model at a time via partial unique index
+CREATE UNIQUE INDEX IF NOT EXISTS trained_models_one_active
+    ON trained_models (is_active) WHERE is_active = TRUE;

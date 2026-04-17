@@ -20,6 +20,8 @@ Wi-Fi CSI to detect and locate people.
 | Frontend dashboard | **Hlidskjalf** | Odin's high seat (sees all) | Web UI for live CSI visualization and labeling |
 | Database schema | **Mimir** | Wise being; keeper of knowledge | TimescaleDB storing all CSI data |
 | Deployment/infra | **Bifrost** | The rainbow bridge | Compose, Helm, Ansible — bridges dev to production |
+| ML training daemon | **Nornir** (`nornir/`) | The three Norns who weave fate | Polls for training jobs, fits sklearn models, uploads results |
+| Inference service | **Völva** (`volva/`) | Norse seeress/prophetess | Applies active model to live CSI; exposes predictions API |
 
 > Pick and choose from this table. Not every component needs a raven/Norse name
 > if it feels forced — practical names are fine for minor pieces.

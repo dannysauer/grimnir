@@ -25,6 +25,8 @@ See `GRIMNIR.md` for the full naming reference. Summary:
 | Frontend | **Hlidskjalf** (`hlidskjalf/`) | Web dashboard |
 | Database/models | **Mimir** (`mimir/`) | SQLAlchemy models + first-boot SQL bootstrap |
 | Deployment | **Bifrost** (`bifrost/`) | Compose, Helm, Ansible |
+| ML training daemon | **Nornir** (`nornir/`) | Polls for training jobs; fits sklearn models |
+| Inference service | **Völva** (`volva/`) | Applies active model to live CSI; predictions API |
 
 ## Hardware
 
@@ -84,7 +86,28 @@ grimnir/
 │       └── routers/
 │           ├── stream.py           # GET /api/stream  (SSE, 1s updates)
 │           ├── history.py          # GET /api/history/variance|snapshot|receivers
-│           └── labels.py           # CRUD /api/labels
+│           ├── labels.py           # CRUD /api/labels
+│           ├── training_daemons.py # POST /api/training-daemons/heartbeat, GET /
+│           ├── training_jobs.py    # CRUD /api/training-jobs + lifecycle actions
+│           ├── trained_models.py   # POST/GET /api/models, POST /{id}/activate
+│           ├── training_data.py    # GET /api/training-data (streaming NDJSON)
+│           └── predictions.py      # PUT/GET /api/predictions/current, SSE stream
+├── nornir/                         # ML training daemon (Nornir)
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   └── src/nornir/
+│       ├── main.py                 # Startup, heartbeat loop, job poll loop
+│       ├── client.py               # Freki API client (httpx)
+│       ├── hardware.py             # GPU/CPU capability detection
+│       └── train.py                # Feature extraction + sklearn training + upload
+├── volva/                          # Inference service (Völva)
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   └── src/volva/
+│       ├── main.py                 # FastAPI + SSE subscription + model watcher
+│       ├── client.py               # Freki API client
+│       ├── predict.py              # Feature extraction + model inference
+│       └── state.py                # Active model + latest predictions (module-level)
 ├── hlidskjalf/
 │   └── index.html                  # Single-file mobile-first dashboard (vanilla JS)
 ├── firmware/
@@ -117,6 +140,8 @@ grimnir/
 | ORM / Migrations | SQLAlchemy 2.0, bundled SQL bootstrap | shared `csi_models` package used by all services |
 | Backend | FastAPI, uvicorn | SSE + REST; prometheus-fastapi-instrumentator for metrics |
 | Frontend | Vanilla JS, Chart.js 4, date-fns adapter | Single HTML file |
+| ML training | scikit-learn, joblib, numpy | Nornir daemon; RandomForest on amplitude mean/var features |
+| ML inference | scikit-learn, joblib, FastAPI | Völva service; subscribes to Freki SSE, exposes predictions |
 | Containers | Docker, Docker Compose | Build context is repo root |
 | Kubernetes | Helm chart + Ansible playbook | Uses external DB; MetalLB + external-dns optional |
 | Observability | prometheus-client, prometheus-fastapi-instrumentator | Geri metrics on `:8001/metrics`; Freki on `:8000/metrics` |
@@ -352,23 +377,43 @@ conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 | GET | `/api/labels?minutes=` | Recent labels |
 | POST | `/api/labels` | Create label + backfill `csi_samples.label` |
 | DELETE | `/api/labels/{id}` | Delete label + clear backfill |
+| POST | `/api/training-daemons/heartbeat` | Nornir daemon register/heartbeat upsert |
+| GET | `/api/training-daemons` | List training daemons with last-seen |
+| POST | `/api/training-jobs` | Create queued training job |
+| GET | `/api/training-jobs?status=` | List training jobs |
+| POST | `/api/training-jobs/{id}/claim` | Daemon claims a queued job |
+| POST | `/api/training-jobs/{id}/heartbeat` | Daemon heartbeat during training |
+| POST | `/api/training-jobs/{id}/complete` | Mark job complete |
+| POST | `/api/training-jobs/{id}/fail` | Mark job failed |
+| POST | `/api/training-jobs/{id}/cancel` | Cancel a job |
+| POST | `/api/models` | Upload trained model (multipart) |
+| GET | `/api/models` | List models (metadata only) |
+| GET | `/api/models/{id}` | Get model metadata |
+| GET | `/api/models/{id}/data` | Download raw model bytes |
+| POST | `/api/models/{id}/activate` | Set model as active |
+| GET | `/api/training-data?time_start=&time_end=&rooms=` | Streaming NDJSON labeled CSI export for Nornir |
+| PUT | `/api/predictions/current` | Völva pushes latest predictions |
+| GET | `/api/predictions/current` | Latest predictions (for Home Assistant) |
+| GET | `/api/predictions/stream` | SSE of live predictions |
 | GET | `/health` | Liveness check |
 
 ## Docker Build Notes
 
-Build context for both Dockerfiles is the **repo root** (not the service subdirectory).
-This is because both services depend on the `mimir/` package which sits at the root.
+Build context for all Dockerfiles is the **repo root** (not the service subdirectory).
+All services depend on the `mimir/` package which sits at the root.
 
 ```dockerfile
-# In geri/Dockerfile and freki/Dockerfile:
+# In geri/Dockerfile, freki/Dockerfile, nornir/Dockerfile, volva/Dockerfile:
 COPY mimir/ /mimir
 RUN pip install --no-cache-dir /mimir
 ```
 
 In `bifrost/compose.yaml` the build context is `..` (repo root). When building manually:
 ```bash
-docker build -f geri/Dockerfile -t grimnir/geri .
-docker build -f freki/Dockerfile -t grimnir/freki .
+docker build -f geri/Dockerfile    -t grimnir/geri .
+docker build -f freki/Dockerfile   -t grimnir/freki .
+docker build -f nornir/Dockerfile  -t grimnir/nornir .
+docker build -f volva/Dockerfile   -t grimnir/volva .
 ```
 
 ## Deployment
@@ -445,14 +490,39 @@ See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 - [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
 - [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
-- [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
+- [ ] **ML training pipeline** (#9, #16–21) — infrastructure complete; collect labeled data then train
 
-## ML Pipeline (Future)
+## ML Pipeline
 
 Training data is collected via the Label tab in the dashboard. The `csi_samples`
 table has a `label` column (nullable) that gets backfilled when a label is created.
 
-Query training data:
+### Training workflow
+1. Collect labeled data via Hlidskjalf Label tab
+2. Go to Training tab → queue a training job (select model type, date range, rooms)
+3. A running Nornir daemon picks up the job, streams data via `GET /api/training-data`,
+   trains a RandomForest, and uploads the model via `POST /api/models`
+4. Go to Models tab → review metrics → click Activate
+5. Völva detects the new active model and hot-reloads it within `MODEL_POLL_INTERVAL_S`
+
+### Home Assistant integration
+Point a REST sensor at Völva's `/api/predictions/current`:
+```yaml
+sensor:
+  - platform: rest
+    resource: http://volva.home.arpa:8002/api/predictions/current
+    name: "Room Occupancy"
+    value_template: "{{ value_json.rooms }}"
+    scan_interval: 5
+```
+
+### Feature pipeline versioning
+Both `nornir/src/nornir/train.py` and `volva/src/volva/predict.py` must implement
+the same feature extraction logic. The `FEATURE_CONFIG_VERSION` constant (`v1`)
+is stored with each model and validated by Völva on load. Increment the version
+whenever the feature pipeline changes.
+
+Query training data directly:
 ```sql
 SELECT time, receiver_id, amplitude, phase, label
 FROM csi_samples

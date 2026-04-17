@@ -12,6 +12,14 @@ image:
     repository: ghcr.io/dannysauer/grimnir/freki
     tag: ""
     pullPolicy: IfNotPresent
+  nornir:
+    repository: ghcr.io/dannysauer/grimnir/nornir
+    tag: ""
+    pullPolicy: IfNotPresent
+  volva:
+    repository: ghcr.io/dannysauer/grimnir/volva
+    tag: ""
+    pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
@@ -121,6 +129,64 @@ freki:
   # Extra environment variables for the freki container.
   env:
     HOST: "0.0.0.0"
+    LOG_LEVEL: "info"
+
+# ── Nornir (ML training daemon) ────────────────────────────────────────────
+# Deploy one or more Nornir instances as Deployments. Each instance needs a
+# unique daemonName so it registers as a separate daemon in the job queue.
+# For GPU-accelerated training, enable gpu and set a nodeSelector matching
+# your GPU nodes.
+
+nornir:
+  enabled: true
+  replicaCount: 1
+
+  resources: {}
+  # resources:
+  #   requests:
+  #     cpu: 500m
+  #     memory: 512Mi
+  #   limits:
+  #     cpu: "4"
+  #     memory: 4Gi
+
+  # GPU support — requires nvidia.com/gpu extended resources on the node.
+  # Set enabled: true and add a nodeSelector for your GPU nodes.
+  gpu:
+    enabled: false
+    # nodeSelector:
+    #   accelerator: nvidia-tesla-p100
+
+  env:
+    DAEMON_NAME: "nornir-k8s"
+    HEARTBEAT_INTERVAL_S: "30"
+    JOB_HEARTBEAT_INTERVAL_S: "10"
+    LOG_LEVEL: "info"
+
+# ── Völva (inference service) ───────────────────────────────────────────────
+
+volva:
+  enabled: true
+  replicaCount: 1
+
+  resources: {}
+
+  service:
+    type: ClusterIP
+    port: 8002
+    annotations: {}
+
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 3
+
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+  env:
+    MODEL_POLL_INTERVAL_S: "60"
     LOG_LEVEL: "info"
 
 # ── Vertical Pod Autoscaler ─────────────────────────────────────────────────

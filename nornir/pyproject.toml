@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nornir"
+version = "0.1.0"
+description = "Grimnir ML training daemon — polls for jobs, trains models, uploads results"
+requires-python = ">=3.12"
+dependencies = [
+    "csi-models",
+    "httpx==0.28.1",
+    "numpy==2.2.1",
+    "scikit-learn==1.6.1",
+    "joblib==1.4.2",
+    "psutil==6.1.1",
+    "structlog==24.4.0",
+]
+
+[project.scripts]
+nornir = "nornir.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nornir"]
