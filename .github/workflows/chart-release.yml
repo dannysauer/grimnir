@@ -14,6 +14,11 @@ on:
         type: string
         required: false
         default: ""
+      services:
+        description: Space-separated list of container image services published for the app release
+        type: string
+        required: false
+        default: ""
 
   # Also trigger on standalone changes to the chart source
   push:
@@ -136,16 +141,18 @@ jobs:
           APP_VERSION: ${{ inputs.app_version }}
           CHANGELOG: ${{ inputs.changelog }}
           CHART_VERSION: ${{ steps.version.outputs.chart_version }}
+          RELEASE_SERVICES: ${{ inputs.services }}
         run: |
           {
             echo "## Grimnir Helm chart v${CHART_VERSION}"
             echo ""
-            if [ -n "$APP_VERSION" ]; then
+            if [ -n "$APP_VERSION" ] && [ -n "$RELEASE_SERVICES" ]; then
               echo "### Container images"
               echo ""
               echo '```'
-              echo "ghcr.io/dannysauer/grimnir/geri:${APP_VERSION}"
-              echo "ghcr.io/dannysauer/grimnir/freki:${APP_VERSION}"
+              for service in $RELEASE_SERVICES; do
+                echo "ghcr.io/dannysauer/grimnir/${service}:${APP_VERSION}"
+              done
               echo '```'
               echo ""
             fi

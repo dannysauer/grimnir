@@ -96,16 +96,55 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
+  # ── Resolve releasable services from the Helm chart ───────────────────────
+  services:
+    name: Resolve release services
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.services.outputs.matrix }}
+      list: ${{ steps.services.outputs.list }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Helm image services
+        id: services
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import re
+
+          text = Path("bifrost/helm/grimnir/values.yaml").read_text(encoding="utf-8")
+          match = re.search(r"^image:\n((?:  .*\n)+)", text, re.MULTILINE)
+          if match is None:
+              raise SystemExit("Could not find image: block in bifrost/helm/grimnir/values.yaml")
+
+          services = []
+          for line in match.group(1).splitlines():
+              service = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+              if service:
+                  services.append(service.group(1))
+
+          if not services:
+              raise SystemExit("No release services found in bifrost/helm/grimnir/values.yaml")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"matrix={json.dumps(services)}\n")
+              fh.write(f"list={' '.join(services)}\n")
+          PY
+
   # ── Build and push container images ───────────────────────────────────────
   images:
     name: Build images (${{ matrix.service }})
-    needs: version
+    needs: [version, services]
     if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        service: [geri, freki]
+        service: ${{ fromJson(needs.services.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -144,7 +183,7 @@ jobs:
   # ── Create GitHub release + tag ────────────────────────────────────────────
   release:
     name: Create release
-    needs: [version, images]
+    needs: [version, services, images]
     if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
 
@@ -156,41 +195,51 @@ jobs:
           git tag "${{ needs.version.outputs.version }}"
           git push origin "${{ needs.version.outputs.version }}"
 
+      - name: Generate release notes
+        env:
+          CHANGELOG: ${{ needs.version.outputs.changelog }}
+          RELEASE_SERVICES: ${{ needs.services.outputs.list }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          {
+            echo "## Changes"
+            echo ""
+            echo "$CHANGELOG"
+            echo ""
+            echo "## Container images"
+            echo ""
+            echo '```'
+            for service in $RELEASE_SERVICES; do
+              echo "ghcr.io/dannysauer/grimnir/${service}:${VERSION}"
+            done
+            echo '```'
+            echo ""
+            echo "## Helm chart"
+            echo ""
+            echo '```bash'
+            echo "helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \\"
+            echo "  --version <chart-version> \\"
+            echo '  --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"'
+            echo '```'
+          } > release-notes.md
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.version }}
           name: ${{ needs.version.outputs.version }}
-          body: |
-            ## Changes
-
-            ${{ needs.version.outputs.changelog }}
-
-            ## Container images
-
-            ```
-            ghcr.io/dannysauer/grimnir/geri:${{ needs.version.outputs.version }}
-            ghcr.io/dannysauer/grimnir/freki:${{ needs.version.outputs.version }}
-            ```
-
-            ## Helm chart
-
-            ```bash
-            helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
-              --version <chart-version> \
-              --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"
-            ```
-          generate_release_notes: false
+          body_path: release-notes.md
 
   # ── Trigger chart release with updated appVersion ─────────────────────────
   chart-release:
     name: Trigger chart release
-    needs: [version, release]
+    needs: [version, services, release]
     if: needs.version.outputs.release == 'true'
     uses: ./.github/workflows/chart-release.yml
     with:
       app_version: ${{ needs.version.outputs.version }}
       changelog: ${{ needs.version.outputs.changelog }}
+      services: ${{ needs.services.outputs.list }}
     permissions:
       contents: write
       packages: write
