@@ -7,6 +7,7 @@ from .migrate import run_migrations
 from .models import (
     Base,
     CsiSample,
+    CurrentPrediction,
     Label,
     Receiver,
     ReceiverHeartbeat,
@@ -25,6 +26,7 @@ from .models import (
 __all__ = [
     "Base",
     "CsiSample",
+    "CurrentPrediction",
     "Label",
     "Receiver",
     "ReceiverHeartbeat",

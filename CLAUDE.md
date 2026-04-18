@@ -509,6 +509,10 @@ Training and inference run as two separate services:
   `PUT /api/predictions/current` with `{timestamp, model_id, rooms}`.
   Metrics + `/health` on `:8002`.
 
+Freki persists the latest prediction envelope in Postgres so
+`/api/predictions/current` and `/api/predictions/stream` stay correct across
+multiple replicas.
+
 Feature extraction is shared: both services import
 `csi_models.features.extract_features` from the `mimir` package (gated behind
 the `[features]` pip extra). `feature_config.version` is incremented whenever

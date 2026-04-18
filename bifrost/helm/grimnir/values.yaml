@@ -104,9 +104,10 @@ geri:
 # ── Freki (backend API + Hlidskjalf dashboard) ─────────────────────────────
 
 freki:
-  # Freki is fully stateless and safe to scale horizontally. sessionAffinity
-  # is set to ClientIP on the Service to keep long-lived SSE connections on
-  # the same pod and avoid unnecessary reconnects during rolling updates.
+  # Freki serves shared prediction state from Postgres and is safe to scale
+  # horizontally. sessionAffinity is set to ClientIP on the Service to keep
+  # long-lived SSE connections on the same pod and avoid unnecessary
+  # reconnects during rolling updates.
   replicaCount: 1
 
   resources: {}

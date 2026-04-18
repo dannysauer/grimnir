@@ -59,6 +59,11 @@ as GitHub issues where noted.
       only the claiming daemon can update that running job.
       _(#27)_
 
+- [x] **Shared current prediction state** — `/api/predictions/current` is now
+      stored in Postgres, and `/api/predictions/stream` polls that shared row
+      so multi-replica Freki serves consistent prediction state.
+      _(#28)_
+
 - [x] **SQL injection in `labels.py`** — `list_labels` previously built a raw SQL
       `INTERVAL` clause from the user-supplied `minutes` parameter; replaced with
       `timedelta(minutes=minutes)` via the ORM.

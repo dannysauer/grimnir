@@ -200,6 +200,20 @@ class TrainingJob(Base):
     )
 
 
+class CurrentPrediction(Base):
+    """Singleton row holding the current shared prediction envelope."""
+
+    __tablename__ = "current_predictions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class TrainedModel(Base):
     """Registry of trained models. `model_data` is the joblib-serialized payload."""
 
