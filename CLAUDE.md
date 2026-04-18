@@ -22,6 +22,8 @@ See `GRIMNIR.md` for the full naming reference. Summary:
 | Receiver firmware | **Muninn** | ESP32-S3(s) that capture CSI + stream UDP |
 | Aggregator service | **Geri** (`geri/`) | UDP → TimescaleDB writer |
 | Backend API | **Freki** (`freki/`) | FastAPI REST + SSE |
+| Trainer daemon | **Nornir** (`nornir/`) | Claims training jobs, fits sklearn models |
+| Inference service | **Völva** (`volva/`) | Consumes `/api/csi-stream`, publishes room predictions |
 | Frontend | **Hlidskjalf** (`hlidskjalf/`) | Web dashboard |
 | Database/models | **Mimir** (`mimir/`) | SQLAlchemy models + first-boot SQL bootstrap |
 | Deployment | **Bifrost** (`bifrost/`) | Compose, Helm, Ansible |
@@ -81,10 +83,33 @@ grimnir/
 │       ├── main.py                 # FastAPI app + startup sequence
 │       ├── db.py                   # SessionDep FastAPI dependency
 │       ├── metrics.py              # Prometheus metrics definitions
+│       ├── orphan_reaper.py        # Lifespan task: fail orphaned training jobs
 │       └── routers/
-│           ├── stream.py           # GET /api/stream  (SSE, 1s updates)
+│           ├── stream.py           # GET /api/stream       (SSE, 1s summary)
+│           ├── csi_stream.py       # GET /api/csi-stream   (SSE, raw CSI rows)
 │           ├── history.py          # GET /api/history/variance|snapshot|receivers
-│           └── labels.py           # CRUD /api/labels
+│           ├── labels.py           # CRUD /api/labels
+│           ├── training_daemons.py # Nornir daemon registration + heartbeats
+│           ├── training_jobs.py    # Training-job queue (create/claim/report)
+│           ├── training_data.py    # Cursor-paginated training-data export
+│           ├── models.py           # Trained-model upload/list/activate/download
+│           └── predictions.py      # PUT/GET /api/predictions/current (Völva cache)
+├── nornir/                         # ML trainer daemon (claims jobs, fits sklearn)
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   └── src/nornir/
+│       ├── main.py                 # Claim loop, metrics server, signal handling
+│       ├── freki_client.py         # Typed async HTTP client for Freki
+│       ├── train.py                # Feature-window collection + RandomForest fit
+│       └── metrics.py              # Prometheus metrics on :8001
+├── volva/                          # Live inference service (SSE → predictions)
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   └── src/volva/
+│       ├── main.py                 # FastAPI app with /health + /metrics
+│       ├── model_loader.py         # Active-model fetch + hot-swap + version check
+│       ├── predict.py              # SSE consumer, per-receiver windowing, publish
+│       └── metrics.py              # Prometheus metrics (volva_* namespace)
 ├── hlidskjalf/
 │   └── index.html                  # Single-file mobile-first dashboard (vanilla JS)
 ├── firmware/
@@ -119,7 +144,8 @@ grimnir/
 | Frontend | Vanilla JS, Chart.js 4, date-fns adapter | Single HTML file |
 | Containers | Docker, Docker Compose | Build context is repo root |
 | Kubernetes | Helm chart + Ansible playbook | Uses external DB; MetalLB + external-dns optional |
-| Observability | prometheus-client, prometheus-fastapi-instrumentator | Geri metrics on `:8001/metrics`; Freki on `:8000/metrics` |
+| ML | scikit-learn 1.5.2, numpy 2.1.3, joblib | RandomForestClassifier; features in shared `csi_models.features` |
+| Observability | prometheus-client, prometheus-fastapi-instrumentator | Geri `:8001`; Freki `:8000/metrics`; Nornir `:8001`; Völva `:8002/metrics` |
 | Helm extras | VPA, ServiceMonitor, Grafana sidecar ConfigMap | All disabled by default; enable via values |
 
 ## Python Conventions
@@ -346,12 +372,25 @@ conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/stream` | SSE — JSON snapshot every 1s, all receivers |
+| GET | `/api/csi-stream` | SSE — raw `csi_samples` rows since cursor (Völva subscribes here) |
 | GET | `/api/history/receivers` | All receivers with heartbeat |
 | GET | `/api/history/variance?receiver_id=&minutes=` | Per-minute RSSI variance (uses continuous aggregate, falls back to raw) |
 | GET | `/api/history/snapshot?receiver_id=&limit=` | Raw CSI samples for heatmap |
 | GET | `/api/labels?minutes=` | Recent labels |
 | POST | `/api/labels` | Create label + backfill `csi_samples.label` |
 | DELETE | `/api/labels/{id}` | Delete label + clear backfill |
+| GET | `/api/training-data?time_start=&time_end=&rooms=&cursor=` | Cursor-paginated NDJSON of labeled CSI rows (Nornir pulls via loop) |
+| POST | `/api/training-daemons/register` | Nornir registers on startup |
+| POST | `/api/training-daemons/{name}/heartbeat` | Nornir keep-alive |
+| GET/POST | `/api/training-jobs` | List + enqueue training jobs (validates rooms + non-empty window) |
+| POST | `/api/training-jobs/{id}/claim` | Race-free claim — returns 409 if lost |
+| POST | `/api/training-jobs/{id}/report` | Progress + status updates from trainer |
+| POST | `/api/training-jobs/{id}/cancel` | Mark job cancelled |
+| GET/POST | `/api/models` | List + upload trained models (≤ 100 MB) |
+| GET | `/api/models/{id}/data` | Download serialized joblib blob |
+| GET | `/api/models/active` | Currently-active model metadata |
+| POST | `/api/models/{id}/activate` | Atomic activate via FOR UPDATE + CTE |
+| GET/PUT | `/api/predictions/current` | Völva publishes `{timestamp, model_id, rooms}`; HA polls |
 | GET | `/health` | Liveness check |
 
 ## Docker Build Notes
@@ -447,19 +486,33 @@ See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
 - [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
 
-## ML Pipeline (Future)
+## ML Pipeline
 
-Training data is collected via the Label tab in the dashboard. The `csi_samples`
-table has a `label` column (nullable) that gets backfilled when a label is created.
+Training and inference run as two separate services:
 
-Query training data:
-```sql
-SELECT time, receiver_id, amplitude, phase, label
-FROM csi_samples
-WHERE label IS NOT NULL
-ORDER BY time;
-```
+- **Nornir** (`nornir/`) — a claim-loop daemon. Registers with Freki, claims
+  a `queued` training job (race-free `UPDATE … WHERE status='queued' RETURNING`),
+  streams labeled training data via the cursor-paginated
+  `GET /api/training-data`, fits a `RandomForestClassifier`, uploads the
+  serialized model to Freki with a `feature_config` JSONB blob, and reports
+  status. Metrics on `:8001`.
 
-GPU machines (Tesla P100 recommended) are available for training. No ML code
-exists yet — this is the next major phase after the data collection pipeline
-is validated.
+- **Völva** (`volva/`) — live inference. Polls `/api/models/active`, hot-swaps
+  the in-memory classifier when the active model id changes (refusing models
+  whose `feature_config.version` mismatches this build's `FEATURE_VERSION`),
+  subscribes to `/api/csi-stream`, maintains a per-receiver sliding window,
+  majority-votes across the last N per-receiver predictions, and publishes
+  `PUT /api/predictions/current` with `{timestamp, model_id, rooms}`.
+  Metrics + `/health` on `:8002`.
+
+Feature extraction is shared: both services import
+`csi_models.features.extract_features` from the `mimir` package (gated behind
+the `[features]` pip extra). `feature_config.version` is incremented whenever
+extractor output changes, which Völva enforces on model load.
+
+**Label carve-out (plan A2):** v1 uses `labels.occupants` as the human-count
+label — `occupants` currently includes pets (#14). A predicted room is reported
+as `human_count=1` with all other known rooms at `0`.
+
+GPU machines (Tesla P100) are available if a future trainer needs them; the
+current `RandomForestClassifier` trains on CPU in seconds on typical datasets.

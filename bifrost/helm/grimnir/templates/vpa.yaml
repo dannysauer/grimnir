@@ -45,4 +45,48 @@ spec:
           {{- toYaml .Values.vpa.freki.minAllowed | nindent 10 }}
         maxAllowed:
           {{- toYaml .Values.vpa.freki.maxAllowed | nindent 10 }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ printf "%s-nornir" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nornir
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ printf "%s-nornir" (include "grimnir.fullname" .) }}
+  updatePolicy:
+    updateMode: {{ .Values.vpa.updateMode | quote }}
+  resourcePolicy:
+    containerPolicies:
+      - containerName: nornir
+        minAllowed:
+          {{- toYaml .Values.vpa.nornir.minAllowed | nindent 10 }}
+        maxAllowed:
+          {{- toYaml .Values.vpa.nornir.maxAllowed | nindent 10 }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ printf "%s-volva" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: volva
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ printf "%s-volva" (include "grimnir.fullname" .) }}
+  updatePolicy:
+    updateMode: {{ .Values.vpa.updateMode | quote }}
+  resourcePolicy:
+    containerPolicies:
+      - containerName: volva
+        minAllowed:
+          {{- toYaml .Values.vpa.volva.minAllowed | nindent 10 }}
+        maxAllowed:
+          {{- toYaml .Values.vpa.volva.maxAllowed | nindent 10 }}
 {{- end }}

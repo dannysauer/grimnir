@@ -79,8 +79,16 @@ as GitHub issues where noted.
 
 ## ML Pipeline
 
-- [ ] **ML training pipeline** — training data is collected via the Label tab;
-      no training code exists yet. GPU machines (Tesla P100) are available.
-      Start with classical features (mean/variance per subcarrier) before deep
-      learning.
-      _(#9)_
+- [x] **ML training pipeline** — shared feature extraction in
+      `csi_models.features`; Freki routers for training jobs / daemons / models /
+      training data / predictions / csi-stream; Nornir training daemon
+      (`nornir/`) claiming jobs and uploading sklearn models; Völva inference
+      service (`volva/`) consuming `/api/csi-stream` and publishing room
+      predictions; Hlidskjalf Training + Models tabs; compose + Helm chart for
+      both new services. Human-count label is `labels.occupants` (see #14).
+      _(#9 / #16 / #17 / #18 / #19 / #20 / #21)_
+
+- [ ] **Pets vs humans in `occupants`** — v1 ML label is the raw `occupants`
+      column, which currently includes pets. Split once tag inputs identify
+      humans only.
+      _(#14)_

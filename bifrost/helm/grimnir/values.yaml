@@ -12,6 +12,14 @@ image:
     repository: ghcr.io/dannysauer/grimnir/freki
     tag: ""
     pullPolicy: IfNotPresent
+  nornir:
+    repository: ghcr.io/dannysauer/grimnir/nornir
+    tag: ""
+    pullPolicy: IfNotPresent
+  volva:
+    repository: ghcr.io/dannysauer/grimnir/volva
+    tag: ""
+    pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
@@ -123,6 +131,68 @@ freki:
     HOST: "0.0.0.0"
     LOG_LEVEL: "info"
 
+# ── Nornir (ML training daemon) ────────────────────────────────────────────
+
+nornir:
+  # Nornir claims training jobs from Freki and trains scikit-learn models.
+  # Horizontal scaling is safe: the claim route uses a conditional UPDATE so
+  # two daemons cannot claim the same job. Each replica registers itself with
+  # a unique DAEMON_NAME (defaults to "nornir-${HOSTNAME}").
+  replicaCount: 1
+
+  resources: {}
+  # resources:
+  #   requests:
+  #     cpu: 500m
+  #     memory: 512Mi
+  #   limits:
+  #     cpu: "4"
+  #     memory: 4Gi
+
+  # Nornir has no inbound API — it only dials Freki. Metrics are exposed on
+  # METRICS_PORT for ServiceMonitor scraping.
+  service:
+    port: 8001
+    annotations: {}
+
+  # Extra environment variables for the nornir container.
+  env:
+    METRICS_PORT: "8001"
+    CLAIM_INTERVAL_S: "10"
+    HEARTBEAT_S: "30"
+    LOG_LEVEL: "info"
+
+# ── Völva (live inference service) ─────────────────────────────────────────
+
+volva:
+  # Völva subscribes to Freki's /api/csi-stream and publishes predictions
+  # back via PUT /api/predictions/current. Only one replica should run —
+  # multiple writers would race on the single-row predictions cache.
+  replicaCount: 1
+
+  resources: {}
+
+  service:
+    type: ClusterIP
+    port: 8002
+    annotations: {}
+
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 3
+
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+  # Extra environment variables for the volva container.
+  env:
+    HOST: "0.0.0.0"
+    WINDOW_SIZE: "50"
+    MODEL_REFRESH_S: "30"
+    LOG_LEVEL: "info"
+
 # ── Vertical Pod Autoscaler ─────────────────────────────────────────────────
 # Requires the VPA CRD to be installed in the cluster.
 # https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler
@@ -147,10 +217,26 @@ vpa:
     maxAllowed:
       cpu: "2"
       memory: 512Mi
+  nornir:
+    minAllowed:
+      cpu: 100m
+      memory: 256Mi
+    maxAllowed:
+      cpu: "4"
+      memory: 4Gi
+  volva:
+    minAllowed:
+      cpu: 50m
+      memory: 128Mi
+    maxAllowed:
+      cpu: "2"
+      memory: 1Gi
 
 # ── Prometheus metrics ──────────────────────────────────────────────────────
-# Geri: exposes /metrics on a dedicated port (geri.env.METRICS_PORT).
-# Freki: exposes /metrics on the same HTTP port as the API (freki.service.port).
+# Geri:   exposes /metrics on a dedicated port (geri.env.METRICS_PORT).
+# Freki:  exposes /metrics on the same HTTP port as the API (freki.service.port).
+# Nornir: exposes /metrics on a dedicated port (nornir.env.METRICS_PORT).
+# Völva:  exposes /metrics on the same HTTP port as /health (volva.service.port).
 prometheus:
   serviceMonitor:
     # Create ServiceMonitor resources for Prometheus Operator discovery.

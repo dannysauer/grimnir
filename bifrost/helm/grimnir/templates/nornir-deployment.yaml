@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-nornir" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nornir
+spec:
+  replicas: {{ .Values.nornir.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "grimnir.selectorLabels" (merge (dict "component" "nornir") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "grimnir.selectorLabels" (merge (dict "component" "nornir") .) | nindent 8 }}
+        app.kubernetes.io/component: nornir
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: nornir
+          image: {{ include "grimnir.nornir.image" . }}
+          imagePullPolicy: {{ .Values.image.nornir.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.nornir.env.METRICS_PORT | int }}
+              protocol: TCP
+          env:
+            - name: FREKI_URL
+              value: {{ printf "http://%s-freki:%d" (include "grimnir.fullname" .) (.Values.freki.service.port | int) | quote }}
+            - name: DAEMON_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- range $k, $v := .Values.nornir.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- with .Values.nornir.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true

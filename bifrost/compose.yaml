@@ -66,6 +66,55 @@ services:
       geri:
         condition: service_started
 
+  nornir:
+    build:
+      context: ..
+      dockerfile: nornir/Dockerfile
+    image: grimnir/nornir:latest
+    restart: unless-stopped
+    environment:
+      FREKI_URL:         "http://freki:8000"
+      METRICS_PORT:      "8001"
+      DAEMON_NAME:       "nornir-1"
+      CLAIM_INTERVAL_S:  "10"
+      HEARTBEAT_S:       "30"
+      LOG_LEVEL:         "info"
+    networks:
+      - grimnir-internal
+    depends_on:
+      freki:
+        condition: service_started
+
+  volva:
+    build:
+      context: ..
+      dockerfile: volva/Dockerfile
+    image: grimnir/volva:latest
+    restart: unless-stopped
+    environment:
+      FREKI_URL:       "http://freki:8000"
+      HOST:            "0.0.0.0"
+      PORT:            "8002"
+      WINDOW_SIZE:     "50"
+      MODEL_REFRESH_S: "30"
+      LOG_LEVEL:       "info"
+    networks:
+      - grimnir-internal
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8002/health').status == 200 else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      freki:
+        condition: service_started
+
 networks:
   grimnir-internal:
     driver: bridge

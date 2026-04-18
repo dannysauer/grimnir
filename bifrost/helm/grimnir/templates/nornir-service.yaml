@@ -1,0 +1,23 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-nornir" (include "grimnir.fullname" .) }}
+  labels:
+    {{- include "grimnir.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nornir
+  {{- with .Values.nornir.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    {{- include "grimnir.selectorLabels" (merge (dict "component" "nornir") .) | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.nornir.service.port | int }}
+      targetPort: metrics
+      protocol: TCP
+{{- end }}

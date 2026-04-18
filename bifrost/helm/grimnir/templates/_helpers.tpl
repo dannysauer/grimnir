@@ -66,6 +66,16 @@ Resolve image tag: use the explicit tag if set, otherwise fall back to AppVersio
 {{- printf "%s:%s" .Values.image.freki.repository $tag }}
 {{- end }}
 
+{{- define "grimnir.nornir.image" -}}
+{{- $tag := .Values.image.nornir.tag | default .Chart.AppVersion }}
+{{- printf "%s:%s" .Values.image.nornir.repository $tag }}
+{{- end }}
+
+{{- define "grimnir.volva.image" -}}
+{{- $tag := .Values.image.volva.tag | default .Chart.AppVersion }}
+{{- printf "%s:%s" .Values.image.volva.repository $tag }}
+{{- end }}
+
 {{/*
 Name of the Secret holding DATABASE_URL.
 */}}
