@@ -78,8 +78,9 @@ services:
       FREKI_URL:         "http://freki:8000"
       METRICS_PORT:      "8001"
       DAEMON_NAME:       "nornir-1"
-      CLAIM_INTERVAL_S:  "10"
-      HEARTBEAT_S:       "30"
+      POLL_INTERVAL_S:   "10"
+      DAEMON_HEARTBEAT_S: "30"
+      JOB_HEARTBEAT_S:   "15"
       LOG_LEVEL:         "info"
       MODEL_UPLOAD_SHARED_SECRET: ${MODEL_UPLOAD_SHARED_SECRET:-}
       ML_CONTROL_SHARED_SECRET: ${ML_CONTROL_SHARED_SECRET:-}

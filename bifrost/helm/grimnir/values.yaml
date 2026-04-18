@@ -178,8 +178,9 @@ nornir:
   # Extra environment variables for the nornir container.
   env:
     METRICS_PORT: "8001"
-    CLAIM_INTERVAL_S: "10"
-    HEARTBEAT_S: "30"
+    POLL_INTERVAL_S: "10"
+    DAEMON_HEARTBEAT_S: "30"
+    JOB_HEARTBEAT_S: "15"
     LOG_LEVEL: "info"
 
 # ── Völva (live inference service) ─────────────────────────────────────────
