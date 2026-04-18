@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, INET
+from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import Float
 
@@ -146,3 +146,75 @@ class ReceiverHeartbeat(Base):
     )
     ip_address: Mapped[str | None] = mapped_column(INET)
     firmware_version: Mapped[str | None] = mapped_column(Text)
+
+
+class TrainingDaemon(Base):
+    """Nornir training daemon instance, upserted on each heartbeat."""
+
+    __tablename__ = "training_daemons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    host: Mapped[str] = mapped_column(Text, nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(INET)
+    capabilities: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class TrainingJob(Base):
+    """Queued/running/finished training job handed to a Nornir daemon."""
+
+    __tablename__ = "training_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
+    spec: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    daemon_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_daemons.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'failed', 'complete', 'cancelled')",
+            name="training_jobs_status_check",
+        ),
+    )
+
+
+class TrainedModel(Base):
+    """Registry of trained models. `model_data` is the joblib-serialized payload."""
+
+    __tablename__ = "trained_models"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    training_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_jobs.id", ondelete="SET NULL")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    feature_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    model_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
