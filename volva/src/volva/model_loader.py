@@ -79,17 +79,18 @@ async def refresh_loop(
     while not stop.is_set():
         try:
             latest = await fetch_active(client)
-        except (httpx.HTTPError, ModelLoadError) as exc:
-            log.warning("model.refresh_failed", error=str(exc))
-            latest = None
-
-        if latest is None:
-            if holder.current is not None:
-                log.info("model.unloaded")
-                holder.set(None)
-        elif holder.current is None or holder.current.id != latest.id:
-            log.info("model.loaded", model_id=latest.id, classes=latest.classes)
-            holder.set(latest)
+        except httpx.HTTPError as exc:
+            log.warning("model.refresh_fetch_failed", error=str(exc))
+        except ModelLoadError as exc:
+            log.warning("model.refresh_load_failed", error=str(exc))
+        else:
+            if latest is None:
+                if holder.current is not None:
+                    log.info("model.unloaded")
+                    holder.set(None)
+            elif holder.current is None or holder.current.id != latest.id:
+                log.info("model.loaded", model_id=latest.id, classes=latest.classes)
+                holder.set(latest)
 
         try:
             await asyncio.wait_for(stop.wait(), timeout=interval_s)

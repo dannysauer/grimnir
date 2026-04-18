@@ -87,7 +87,11 @@ async def _maybe_publish(
     last_published: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     rooms = _aggregate(votes_by_receiver, model.classes)
-    if last_published is not None and rooms == last_published.get("rooms"):
+    if (
+        last_published is not None
+        and model.id == last_published.get("model_id")
+        and rooms == last_published.get("rooms")
+    ):
         return last_published  # unchanged, skip re-publish
 
     payload = {
@@ -153,6 +157,7 @@ async def stream_loop(
 ) -> None:
     state: dict[int, _ReceiverState] = {}
     last_published: dict[str, Any] | None = None
+    active_model_id: int | None = None
 
     while not stop.is_set():
         try:
@@ -171,8 +176,16 @@ async def stream_loop(
                     model = holder.current
                     if model is None:
                         # No active model yet; drop rows rather than buffering.
+                        active_model_id = None
                         state.clear()
+                        last_published = None
                         continue
+
+                    if model.id != active_model_id:
+                        # Drop buffered rows and vote history from the prior model.
+                        active_model_id = model.id
+                        state.clear()
+                        last_published = None
 
                     changed = await _handle_row(row, model, state, window_size)
                     if changed:
