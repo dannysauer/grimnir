@@ -513,6 +513,98 @@
   }
   .room-del-btn:active { color: var(--warn); }
 
+  /* ── Training / Models ──────────────────────────────────────────────────── */
+  .job-item, .model-item, .daemon-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .job-item .meta, .model-item .meta, .daemon-item .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+  .job-item .title, .model-item .title, .daemon-item .title {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .job-item .sub, .model-item .sub, .daemon-item .sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-transform: lowercase;
+  }
+  .status-pill.queued    { background: color-mix(in srgb, var(--dim)    25%, transparent); color: var(--text-dim); }
+  .status-pill.running   { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  .status-pill.complete  { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); }
+  .status-pill.failed    { background: color-mix(in srgb, var(--warn)   15%, transparent); color: var(--warn); }
+  .status-pill.cancelled { background: color-mix(in srgb, var(--dim)    20%, transparent); color: var(--dim); }
+  .status-pill.active    { background: color-mix(in srgb, var(--accent2) 18%, transparent); color: var(--accent2); }
+
+  .mini-btn {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .mini-btn:active { opacity: .7; }
+  .mini-btn.warn { color: var(--warn); border-color: var(--warn); }
+
+  .quick-btn.selected-green {
+    background: color-mix(in srgb, var(--accent2) 20%, var(--surface2));
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  .prediction-rooms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .prediction-room {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .prediction-room.occupied {
+    background: color-mix(in srgb, var(--accent2) 18%, var(--surface2));
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
   /* ── Empty states ───────────────────────────────────────────────────────── */
   .empty {
     text-align: center;
@@ -761,6 +853,70 @@
 
     </div><!-- /page-label -->
 
+    <!-- TRAINING page -->
+    <div class="page" id="page-training">
+
+      <!-- Daemons section -->
+      <div class="section-title">Training Daemons</div>
+      <div id="daemon-list" style="margin-bottom:14px"><div class="empty">loading…</div></div>
+
+      <!-- New job form -->
+      <div class="label-form">
+        <div class="section-title">New Training Job</div>
+
+        <div class="field">
+          <label>ROOMS (tap to toggle)</label>
+          <div class="quick-btns" id="job-room-btns">
+            <div class="empty" style="padding:8px 0">loading rooms…</div>
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div class="field">
+            <label>START</label>
+            <input type="datetime-local" id="job-start">
+          </div>
+          <div class="field">
+            <label>END</label>
+            <input type="datetime-local" id="job-end">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px">
+          <button class="quick-btn" style="flex:1" onclick="setJobLastN(60)">Last 1 hr</button>
+          <button class="quick-btn" style="flex:1" onclick="setJobLastN(6*60)">Last 6 hr</button>
+          <button class="quick-btn" style="flex:1" onclick="setJobLastN(24*60)">Last 24 hr</button>
+        </div>
+
+        <div class="field">
+          <label>WINDOW SIZE (rows per sample, default 50)</label>
+          <input type="number" id="job-window" value="50" min="10" max="500">
+        </div>
+
+        <button class="btn" onclick="submitJob()">Queue Training Job</button>
+      </div>
+
+      <!-- Jobs list -->
+      <div class="section-title" style="margin-top:6px">Recent Jobs</div>
+      <div id="job-list"><div class="empty">no jobs yet</div></div>
+
+    </div><!-- /page-training -->
+
+    <!-- MODELS page -->
+    <div class="page" id="page-models">
+
+      <!-- Current prediction -->
+      <div class="section-title">Current Prediction</div>
+      <div id="prediction-card" class="rx-card" style="margin-bottom:14px">
+        <div class="empty" style="padding:8px 0">no prediction yet</div>
+      </div>
+
+      <!-- Models list -->
+      <div class="section-title">Trained Models</div>
+      <div id="model-list"><div class="empty">no models yet</div></div>
+
+    </div><!-- /page-models -->
+
   </div><!-- /pages -->
 
   <!-- Room manager modal (position: fixed, sits above everything) -->
@@ -806,6 +962,14 @@
     <button class="nav-btn" data-page="page-label" onclick="showPage(this)">
       <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
       Label
+    </button>
+    <button class="nav-btn" data-page="page-training" onclick="showPage(this)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Train
+    </button>
+    <button class="nav-btn" data-page="page-models" onclick="showPage(this)">
+      <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      Models
     </button>
   </nav>
 </div>
@@ -1251,6 +1415,7 @@ async function loadRooms() {
   }
   renderLiveRoomButtons();
   renderTimestampRoomPicker();
+  renderJobRoomPicker();
 }
 
 function renderLiveRoomButtons() {
@@ -1508,6 +1673,7 @@ async function loadRoomManager() {
   renderRoomManager();
   renderLiveRoomButtons();
   renderTimestampRoomPicker();
+  renderJobRoomPicker();
 }
 
 function renderRoomManager() {
@@ -1670,6 +1836,225 @@ async function loadAllReceivers() {
     syncHeatmapSelector(sorted);
   } catch (_) {}
 }
+
+// ── Training tab ──────────────────────────────────────────────────────────────
+let selectedJobRooms = new Set();
+
+function renderJobRoomPicker() {
+  const container = document.getElementById('job-room-btns');
+  if (!container) return;
+  if (!knownRooms.length) {
+    container.innerHTML = '<div class="empty" style="padding:8px 0">no rooms yet — add via Labels → manage rooms</div>';
+    return;
+  }
+  container.innerHTML = knownRooms.map(r => {
+    const sel = selectedJobRooms.has(r.name) ? ' selected-green' : '';
+    return `<button class="quick-btn${sel}" onclick="toggleJobRoom('${escHtml(r.name)}', this)">${escHtml(displayRoomName(r.name))}</button>`;
+  }).join('');
+}
+
+function toggleJobRoom(name, _el) {
+  if (selectedJobRooms.has(name)) selectedJobRooms.delete(name);
+  else selectedJobRooms.add(name);
+  renderJobRoomPicker();
+}
+
+function setJobLastN(minutes) {
+  const now = new Date();
+  document.getElementById('job-end').value   = toLocalDT(now);
+  document.getElementById('job-start').value = toLocalDT(new Date(now - minutes * 60_000));
+}
+
+async function loadDaemons() {
+  try {
+    const res = await fetch(`${API}/api/training-daemons`);
+    if (!res.ok) return;
+    renderDaemons(await res.json());
+  } catch (_) {}
+}
+
+function renderDaemons(daemons) {
+  const list = document.getElementById('daemon-list');
+  if (!daemons.length) { list.innerHTML = '<div class="empty">no daemons connected</div>'; return; }
+  list.innerHTML = daemons.map(d => {
+    const ageMs = Date.now() - new Date(d.last_seen);
+    const pill = ageMs < 60_000 ? 'live' : ageMs < 300_000 ? 'stale' : 'offline';
+    return `
+      <div class="daemon-item">
+        <div class="meta">
+          <div class="title">${escHtml(d.name)}</div>
+          <div class="sub">${escHtml(d.host)} · last seen ${escHtml(timeAgo(d.last_seen))}</div>
+        </div>
+        <span class="rx-pill ${pill}">${pill}</span>
+      </div>`;
+  }).join('');
+}
+
+async function loadJobs() {
+  try {
+    const res = await fetch(`${API}/api/training-jobs?limit=30`);
+    if (!res.ok) return;
+    renderJobs(await res.json());
+  } catch (_) {}
+}
+
+function renderJobs(jobs) {
+  const list = document.getElementById('job-list');
+  if (!jobs.length) { list.innerHTML = '<div class="empty">no jobs yet</div>'; return; }
+  list.innerHTML = jobs.map(j => {
+    const rooms = (j.spec && j.spec.rooms) ? j.spec.rooms.join(', ') : '—';
+    const when = new Date(j.created_at).toLocaleString([], {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    const status = escHtml(j.status);
+    const canCancel = j.status === 'queued' || j.status === 'running';
+    const errLine = j.error ? `<div class="sub" style="color:var(--warn)">${escHtml(j.error)}</div>` : '';
+    return `
+      <div class="job-item">
+        <div class="meta">
+          <div class="title">#${parseInt(j.id)} · ${escHtml(rooms)}</div>
+          <div class="sub">${escHtml(when)}${j.daemon_id ? ' · daemon ' + parseInt(j.daemon_id) : ''}</div>
+          ${errLine}
+        </div>
+        <span class="status-pill ${status}">${status}</span>
+        ${canCancel ? `<button class="mini-btn warn" onclick="cancelJob(${parseInt(j.id)})">cancel</button>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function submitJob() {
+  const rooms = Array.from(selectedJobRooms);
+  if (!rooms.length) { toast('Select at least one room', 'warn'); return; }
+  const startRaw = document.getElementById('job-start').value;
+  const endRaw   = document.getElementById('job-end').value;
+  if (!startRaw || !endRaw) { toast('Start and end required', 'warn'); return; }
+  const windowSize = parseInt(document.getElementById('job-window').value, 10) || 50;
+
+  const body = {
+    spec: {
+      model_type: 'random_forest',
+      hyperparams: { window_size: windowSize },
+      time_start: new Date(startRaw).toISOString(),
+      time_end:   new Date(endRaw).toISOString(),
+      rooms,
+    },
+  };
+  try {
+    const res = await fetch(`${API}/api/training-jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      let detail; try { detail = JSON.parse(txt).detail; } catch (_) { detail = txt || `HTTP ${res.status}`; }
+      toast(detail ?? `HTTP ${res.status}`, 'warn'); return;
+    }
+    toast(`job queued`, 'ok');
+    selectedJobRooms.clear();
+    renderJobRoomPicker();
+    loadJobs();
+  } catch (e) {
+    toast(e.message ?? 'Network error', 'warn');
+  }
+}
+
+async function cancelJob(id) {
+  try {
+    const res = await fetch(`${API}/api/training-jobs/${id}/cancel`, { method: 'POST' });
+    if (res.ok) { toast('job cancelled', 'ok'); loadJobs(); }
+    else        { toast(`HTTP ${res.status}`, 'warn'); }
+  } catch (e) { toast(e.message ?? 'Network error', 'warn'); }
+}
+
+// ── Models tab ────────────────────────────────────────────────────────────────
+async function loadModels() {
+  try {
+    const res = await fetch(`${API}/api/models?limit=50`);
+    if (!res.ok) return;
+    renderModels(await res.json());
+  } catch (_) {}
+}
+
+function renderModels(models) {
+  const list = document.getElementById('model-list');
+  if (!models.length) { list.innerHTML = '<div class="empty">no models yet</div>'; return; }
+  list.innerHTML = models.map(m => {
+    const when = new Date(m.created_at).toLocaleString([], {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    const acc = (m.metrics && typeof m.metrics.accuracy === 'number')
+      ? ` · acc ${(m.metrics.accuracy * 100).toFixed(1)}%` : '';
+    const kb = m.size_bytes ? ` · ${(m.size_bytes / 1024).toFixed(0)} KB` : '';
+    const pill = m.is_active
+      ? '<span class="status-pill active">active</span>'
+      : `<button class="mini-btn" onclick="activateModel(${parseInt(m.id)})">activate</button>`;
+    return `
+      <div class="model-item">
+        <div class="meta">
+          <div class="title">#${parseInt(m.id)} · ${escHtml(m.name)}</div>
+          <div class="sub">${escHtml(when)}${escHtml(acc)}${escHtml(kb)}</div>
+        </div>
+        ${pill}
+      </div>`;
+  }).join('');
+}
+
+async function activateModel(id) {
+  try {
+    const res = await fetch(`${API}/api/models/${id}/activate`, { method: 'POST' });
+    if (res.ok) { toast(`model #${id} active`, 'ok'); loadModels(); loadPrediction(); }
+    else        { toast(`HTTP ${res.status}`, 'warn'); }
+  } catch (e) { toast(e.message ?? 'Network error', 'warn'); }
+}
+
+async function loadPrediction() {
+  const card = document.getElementById('prediction-card');
+  try {
+    const res = await fetch(`${API}/api/predictions/current`);
+    if (res.status === 404) {
+      card.innerHTML = '<div class="empty" style="padding:8px 0">no prediction yet</div>';
+      return;
+    }
+    if (!res.ok) return;
+    const p = await res.json();
+    const when = new Date(p.timestamp).toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const rooms = Object.entries(p.rooms || {}).map(([name, r]) => {
+      const cls = (r.human_count || 0) > 0 ? 'prediction-room occupied' : 'prediction-room';
+      return `<span class="${cls}">${escHtml(displayRoomName(name))} · ${parseInt(r.human_count || 0)}</span>`;
+    }).join('');
+    card.innerHTML = `
+      <div class="rx-header">
+        <div>
+          <div class="rx-name">model #${parseInt(p.model_id)}</div>
+          <div class="rx-loc">${escHtml(when)}</div>
+        </div>
+      </div>
+      <div class="prediction-rooms">${rooms || '<span class="empty">no rooms</span>'}</div>`;
+  } catch (_) {}
+}
+
+// Polling: only when the tab is actually visible (mirrors heatmap pattern).
+const isTrainingActive = () => document.getElementById('page-training').classList.contains('active');
+const isModelsActive   = () => document.getElementById('page-models').classList.contains('active');
+
+setInterval(() => {
+  if (isTrainingActive()) { loadDaemons(); loadJobs(); }
+}, 10_000);
+setInterval(() => {
+  if (isModelsActive()) { loadModels(); loadPrediction(); }
+}, 10_000);
+
+// Eager-load data when a tab is first opened
+document.querySelector('[data-page="page-training"]').addEventListener('click', () => {
+  loadDaemons(); loadJobs(); renderJobRoomPicker();
+  if (!document.getElementById('job-end').value) setJobLastN(60);
+});
+document.querySelector('[data-page="page-models"]').addEventListener('click', () => {
+  loadModels(); loadPrediction();
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initCharts();
