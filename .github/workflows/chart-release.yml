@@ -89,7 +89,8 @@ jobs:
           echo "release=true"              >> "$GITHUB_OUTPUT"
           echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Update Chart.yaml versions
+      - name: Resolve packaged chart metadata
+        id: chart_meta
         if: steps.version.outputs.release == 'true'
         run: |
           CHART_FILE="bifrost/helm/grimnir/Chart.yaml"
@@ -98,13 +99,17 @@ jobs:
           # Update chart version
           sed -i "s/^version:.*/version: ${CHART_VERSION}/" "$CHART_FILE"
 
-          # Update appVersion if provided by the calling workflow
           APP_VERSION="${{ inputs.app_version }}"
-          if [ -n "$APP_VERSION" ]; then
-            # Strip leading 'v' for appVersion field (Helm convention allows either,
-            # but keeping it consistent with the image tag)
-            sed -i "s/^appVersion:.*/appVersion: \"${APP_VERSION}\"/" "$CHART_FILE"
+          if [ -z "$APP_VERSION" ]; then
+            APP_VERSION=$(git tag -l 'v*.*.*' --sort=-version:refname | head -1)
+            if [ -z "$APP_VERSION" ]; then
+              echo "No app release tag found for appVersion" >&2
+              exit 1
+            fi
           fi
+          sed -i "s/^appVersion:.*/appVersion: \"${APP_VERSION}\"/" "$CHART_FILE"
+
+          echo "app_version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
 
           echo "Chart.yaml after update:"
           grep -E '^(version|appVersion):' "$CHART_FILE"
@@ -138,7 +143,7 @@ jobs:
       - name: Generate release notes
         if: steps.version.outputs.release == 'true'
         env:
-          APP_VERSION: ${{ inputs.app_version }}
+          APP_VERSION: ${{ steps.chart_meta.outputs.app_version }}
           CHANGELOG: ${{ inputs.changelog }}
           CHART_VERSION: ${{ steps.version.outputs.chart_version }}
           RELEASE_SERVICES: ${{ inputs.services }}

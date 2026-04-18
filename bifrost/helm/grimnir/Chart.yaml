@@ -3,12 +3,15 @@ name: grimnir
 description: Wi-Fi CSI human presence detection and room-level localization
 type: application
 
-# Chart version — bumped by the chart-release workflow on every chart change.
-# Follows semver; managed automatically via chart-v* git tags.
+# Chart version — CI-managed placeholder. chart-release.yml rewrites this value
+# before packaging, so the checked-in value can legitimately differ from the
+# published chart artifact.
 version: 0.1.1
 
-# Application version — updated by the release workflow to match the container tag.
-appVersion: "0.1.0"
+# Application version — CI-managed placeholder. release packaging rewrites this
+# to the app release tag, and Helm-only chart releases resolve the latest v* tag
+# before publishing so appVersion does not silently drift stale.
+appVersion: "v0.10.0"
 
 keywords:
   - wifi
