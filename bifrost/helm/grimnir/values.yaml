@@ -41,6 +41,15 @@ database:
   existingSecret: ""
   secretKey: DATABASE_URL
 
+# -- Optional shared secret for POST /api/models.
+# When configured, Freki requires X-Grimnir-Model-Upload-Secret on model uploads
+# and Nornir sends the same value automatically. Prefer existingSecret on shared
+# clusters so the secret is not committed into values files.
+modelUploadAuth:
+  sharedSecret: ""
+  existingSecret: ""
+  secretKey: MODEL_UPLOAD_SHARED_SECRET
+
 # ── Geri (UDP aggregator) ───────────────────────────────────────────────────
 
 geri:

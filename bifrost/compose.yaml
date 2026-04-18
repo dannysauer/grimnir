@@ -47,6 +47,7 @@ services:
       HOST:         "0.0.0.0"
       PORT:         "8000"
       LOG_LEVEL:    "info"
+      MODEL_UPLOAD_SHARED_SECRET: ${MODEL_UPLOAD_SHARED_SECRET:-}
     ports:
       - "8000:8000"
     networks:
@@ -79,6 +80,7 @@ services:
       CLAIM_INTERVAL_S:  "10"
       HEARTBEAT_S:       "30"
       LOG_LEVEL:         "info"
+      MODEL_UPLOAD_SHARED_SECRET: ${MODEL_UPLOAD_SHARED_SECRET:-}
     networks:
       - grimnir-internal
     depends_on:

@@ -15,6 +15,8 @@ from typing import Any
 
 import httpx
 
+MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"
+
 
 class FrekiError(RuntimeError):
     """Raised when a Freki HTTP call returns a non-2xx status."""
@@ -28,11 +30,17 @@ class FrekiError(RuntimeError):
 class FrekiClient:
     """Async HTTP wrapper around Freki's training/model endpoints."""
 
-    def __init__(self, base_url: str, timeout_s: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_s: float = 30.0,
+        model_upload_shared_secret: str | None = None,
+    ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=timeout_s,
         )
+        self._model_upload_shared_secret = model_upload_shared_secret or None
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -54,6 +62,7 @@ class FrekiClient:
         params: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
         files: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
         expected: tuple[int, ...] = (200, 201, 204),
     ) -> httpx.Response:
         response = await self._client.request(
@@ -63,6 +72,7 @@ class FrekiClient:
             params=params,
             data=data,
             files=files,
+            headers=headers,
         )
         if response.status_code not in expected:
             raise FrekiError(method, path, response.status_code, response.text)
@@ -173,11 +183,17 @@ class FrekiClient:
         }
         if training_job_id is not None:
             form["training_job_id"] = str(training_job_id)
+        headers = None
+        if self._model_upload_shared_secret:
+            headers = {
+                MODEL_UPLOAD_SECRET_HEADER: self._model_upload_shared_secret,
+            }
         response = await self._request(
             "POST",
             "/api/models",
             data=form,
             files={"model_data": (f"{name}.joblib", model_bytes, "application/octet-stream")},
+            headers=headers,
             expected=(201,),
         )
         return response.json()

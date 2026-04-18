@@ -86,3 +86,14 @@ Name of the Secret holding DATABASE_URL.
 {{- printf "%s-db" (include "grimnir.fullname" .) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the Secret holding MODEL_UPLOAD_SHARED_SECRET.
+*/}}
+{{- define "grimnir.modelUploadSecretName" -}}
+{{- if .Values.modelUploadAuth.existingSecret }}
+{{- .Values.modelUploadAuth.existingSecret }}
+{{- else }}
+{{- printf "%s-model-upload" (include "grimnir.fullname" .) }}
+{{- end }}
+{{- end }}

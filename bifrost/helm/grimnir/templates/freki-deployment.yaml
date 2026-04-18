@@ -38,6 +38,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "grimnir.dbSecretName" . }}
                   key: {{ .Values.database.secretKey }}
+            {{- if or .Values.modelUploadAuth.existingSecret .Values.modelUploadAuth.sharedSecret }}
+            - name: MODEL_UPLOAD_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grimnir.modelUploadSecretName" . }}
+                  key: {{ .Values.modelUploadAuth.secretKey }}
+            {{- end }}
             - name: PORT
               value: {{ .Values.freki.service.port | toString | quote }}
             {{- range $k, $v := .Values.freki.env }}

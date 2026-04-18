@@ -40,8 +40,15 @@ as GitHub issues where noted.
 
 - [ ] **HTTPS + auth for Freki** — no authentication currently; put behind nginx
       or an API gateway with at minimum HTTP Basic Auth before exposing beyond
-      localhost.
+      localhost. Narrow mitigation: `MODEL_UPLOAD_SHARED_SECRET` now gates
+      `POST /api/models` when configured, but broader API auth is still open.
       _(#5)_
+
+- [x] **Shared-secret gate for model uploads** — optional
+      `MODEL_UPLOAD_SHARED_SECRET` now requires
+      `X-Grimnir-Model-Upload-Secret` on `POST /api/models`, and Nornir sends
+      the same header automatically during model upload.
+      _(#29)_
 
 - [x] **SQL injection in `labels.py`** — `list_labels` previously built a raw SQL
       `INTERVAL` clause from the user-supplied `minutes` parameter; replaced with

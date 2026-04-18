@@ -12,6 +12,7 @@ Environment variables:
   HOST                       bind address (default 0.0.0.0)
   PORT                       bind port (default 8000)
   LOG_LEVEL                  debug | info | warning | error (default info)
+  MODEL_UPLOAD_SHARED_SECRET optional shared secret required for POST /api/models
   ORPHAN_CHECK_INTERVAL_S    reaper poll interval (default 60)
   ORPHAN_TIMEOUT_S           training job heartbeat timeout (default 300)
   CSI_STREAM_INTERVAL_MS     /api/csi-stream poll interval (default 200)

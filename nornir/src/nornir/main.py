@@ -19,6 +19,7 @@ Environment variables:
   JOB_HEARTBEAT_S          job-row heartbeat cadence (default 15)
   METRICS_PORT             Prometheus port, 0 to disable (default 8001)
   LOG_LEVEL                debug | info | warning | error (default info)
+  MODEL_UPLOAD_SHARED_SECRET shared secret sent on POST /api/models when set
 
 The training target is the ``label`` column on ``training_samples`` (room
 name). Per issue #14, ``labels.occupants`` is out of scope for v1; Völva
@@ -50,6 +51,7 @@ DAEMON_HEARTBEAT_S = float(os.environ.get("DAEMON_HEARTBEAT_S", "30"))
 JOB_HEARTBEAT_S = float(os.environ.get("JOB_HEARTBEAT_S", "15"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "8001"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
+MODEL_UPLOAD_SHARED_SECRET = os.environ.get("MODEL_UPLOAD_SHARED_SECRET", "")
 
 CAPABILITIES = {
     "model_types": ["random_forest"],
@@ -213,7 +215,12 @@ async def _daemon_heartbeat_loop(client: FrekiClient, stop: asyncio.Event) -> No
 
 
 async def main() -> None:
-    log.info("nornir.starting", freki=FREKI_URL, daemon_name=DAEMON_NAME)
+    log.info(
+        "nornir.starting",
+        freki=FREKI_URL,
+        daemon_name=DAEMON_NAME,
+        model_upload_secret=bool(MODEL_UPLOAD_SHARED_SECRET),
+    )
 
     if METRICS_PORT > 0:
         start_http_server(METRICS_PORT)
@@ -224,7 +231,10 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
-    async with FrekiClient(FREKI_URL) as client:
+    async with FrekiClient(
+        FREKI_URL,
+        model_upload_shared_secret=MODEL_UPLOAD_SHARED_SECRET,
+    ) as client:
         # Retry initial registration until Freki is reachable.
         while not stop_event.is_set():
             try:

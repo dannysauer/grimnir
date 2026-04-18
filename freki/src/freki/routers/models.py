@@ -4,18 +4,23 @@ routers/models.py
 GET  /api/models                 list trained models (no bytes)
 GET  /api/models/active          return currently-active model metadata, or 404
 GET  /api/models/{id}/data       stream the raw model_data bytes
-POST /api/models                 upload a trained model (multipart/form-data)
+POST /api/models                 upload a trained model (multipart/form-data).
+                                When MODEL_UPLOAD_SHARED_SECRET is set,
+                                requires X-Grimnir-Model-Upload-Secret.
 POST /api/models/{id}/activate   make this the active model (atomic swap)
 """
 
 from __future__ import annotations
 
+import hmac
 import json
+import os
 from datetime import datetime
+from typing import Annotated
 
 from csi_models import TrainedModel
 from csi_models.features import FeatureConfig
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Header, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -23,6 +28,9 @@ from sqlalchemy import select, text
 from ..db import SessionDep
 
 router = APIRouter()
+
+MODEL_UPLOAD_SHARED_SECRET = os.environ.get("MODEL_UPLOAD_SHARED_SECRET", "")
+MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -41,6 +49,24 @@ class ModelOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+def require_model_upload_secret(
+    provided_secret: Annotated[
+        str | None,
+        Header(alias=MODEL_UPLOAD_SECRET_HEADER),
+    ] = None,
+) -> None:
+    """Guard model uploads when a shared secret is configured."""
+    if not MODEL_UPLOAD_SHARED_SECRET:
+        return
+    if provided_secret is None or not hmac.compare_digest(
+        provided_secret, MODEL_UPLOAD_SHARED_SECRET
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail=f"{MODEL_UPLOAD_SECRET_HEADER} required",
+        )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -101,6 +127,7 @@ async def model_data(model_id: int, session: SessionDep):
 @router.post("", response_model=ModelOut, status_code=201)
 async def upload_model(
     session: SessionDep,
+    _: None = Depends(require_model_upload_secret),
     name: str = Form(...),
     metrics: str = Form(...),
     feature_config: str = Form(...),

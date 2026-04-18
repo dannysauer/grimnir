@@ -85,6 +85,12 @@ cp .env.example .env
 docker compose -f bifrost/compose.yaml up -d
 ```
 
+Optional hardening:
+- Set `MODEL_UPLOAD_SHARED_SECRET` in `.env` to require the
+  `X-Grimnir-Model-Upload-Secret` header on `POST /api/models`.
+- Use the same value for both Freki and Nornir so the training daemon can keep
+  uploading models normally.
+
 ### Kubernetes (Helm)
 
 ```bash
@@ -92,6 +98,10 @@ helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
   --set database.url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi" \
   --set geri.service.type=LoadBalancer
 ```
+
+Optional hardening:
+- Set `modelUploadAuth.sharedSecret` or point `modelUploadAuth.existingSecret`
+  at a Secret containing `MODEL_UPLOAD_SHARED_SECRET` to gate model uploads.
 
 ### Firmware
 

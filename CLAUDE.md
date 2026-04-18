@@ -386,7 +386,7 @@ conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 | POST | `/api/training-jobs/{id}/claim` | Race-free claim — returns 409 if lost |
 | POST | `/api/training-jobs/{id}/report` | Progress + status updates from trainer |
 | POST | `/api/training-jobs/{id}/cancel` | Mark job cancelled |
-| GET/POST | `/api/models` | List + upload trained models (≤ 100 MB) |
+| GET/POST | `/api/models` | List + upload trained models; upload can require `X-Grimnir-Model-Upload-Secret` |
 | GET | `/api/models/{id}/data` | Download serialized joblib blob |
 | GET | `/api/models/active` | Currently-active model metadata |
 | POST | `/api/models/{id}/activate` | Atomic activate via FOR UPDATE + CTE |
@@ -482,7 +482,7 @@ Helm chart supports optional `ServiceMonitor` resources and a Grafana sidecar
 See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 
 - [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
-- [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth
+- [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth. Narrow mitigation: `POST /api/models` can be gated with `MODEL_UPLOAD_SHARED_SECRET` (#29).
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
 - [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
 
@@ -495,7 +495,8 @@ Training and inference run as two separate services:
   streams labeled training data via the cursor-paginated
   `GET /api/training-data`, fits a `RandomForestClassifier`, uploads the
   serialized model to Freki with a `feature_config` JSONB blob, and reports
-  status. Metrics on `:8001`.
+  status. When `MODEL_UPLOAD_SHARED_SECRET` is set, Nornir sends
+  `X-Grimnir-Model-Upload-Secret` on model uploads. Metrics on `:8001`.
 
 - **Völva** (`volva/`) — live inference. Polls `/api/models/active`, hot-swaps
   the in-memory classifier when the active model id changes (refusing models
