@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "volva"
+version = "0.1.0"
+description = "Völva — CSI live inference service (consumes /api/csi-stream, publishes predictions)"
+requires-python = ">=3.12"
+dependencies = [
+    "csi-models[features]",
+    "fastapi==0.115.5",
+    "uvicorn[standard]==0.32.1",
+    "structlog==24.4.0",
+    "httpx==0.28.1",
+    "httpx-sse==0.4.0",
+    "scikit-learn==1.5.2",
+    "numpy==2.1.3",
+    "joblib==1.4.2",
+    "prometheus-fastapi-instrumentator==7.1.0",
+    "prometheus-client==0.21.0",
+]
+
+[project.scripts]
+volva = "volva.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volva"]
