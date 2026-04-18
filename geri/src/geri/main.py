@@ -121,7 +121,9 @@ async def batch_writer(queue: asyncio.Queue) -> None:
 
         try:
             if pkt.receiver_name not in receiver_cache:
-                receiver_id = await get_or_create_receiver_id(pkt.receiver_name, pkt.transmitter_mac)
+                receiver_id = await get_or_create_receiver_id(
+                    pkt.receiver_name, pkt.transmitter_mac
+                )
                 receiver_cache[pkt.receiver_name] = receiver_id
             receiver_id = receiver_cache[pkt.receiver_name]
         except Exception as exc:

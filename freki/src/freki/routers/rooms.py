@@ -67,9 +67,7 @@ class RoomUpdate(BaseModel):
 
 @router.get("", response_model=list[RoomOut])
 async def list_rooms(session: SessionDep):
-    result = await session.execute(
-        select(Room).order_by(Room.floor.asc(), Room.name.asc())
-    )
+    result = await session.execute(select(Room).order_by(Room.floor.asc(), Room.name.asc()))
     return result.scalars().all()
 
 
@@ -81,7 +79,7 @@ async def create_room(body: RoomCreate, session: SessionDep):
         await session.commit()
     except IntegrityError:
         await session.rollback()
-        raise HTTPException(status_code=409, detail=f"Room '{body.name}' already exists")
+        raise HTTPException(status_code=409, detail=f"Room '{body.name}' already exists") from None
     await session.refresh(room)
     return room
 
@@ -105,15 +103,13 @@ async def update_room(room_name: str, body: RoomUpdate, session: SessionDep):
         await session.flush()
     except IntegrityError:
         await session.rollback()
-        raise HTTPException(status_code=409, detail=f"Room '{body.name}' already exists")
+        raise HTTPException(status_code=409, detail=f"Room '{body.name}' already exists") from None
 
     # labels.room is updated automatically by the FK ON UPDATE CASCADE.
     # csi_samples.label has no FK, so update it explicitly.
     if new_name != old_name:
         await session.execute(
-            update(CsiSample)
-            .where(CsiSample.label == old_name)
-            .values(label=new_name)
+            update(CsiSample).where(CsiSample.label == old_name).values(label=new_name)
         )
 
     await session.commit()
@@ -138,4 +134,4 @@ async def delete_room(room_name: str, session: SessionDep):
         raise HTTPException(
             status_code=409,
             detail=f"Room '{room_name}' has existing labels and cannot be deleted",
-        )
+        ) from None

@@ -86,9 +86,7 @@ async def create_job(body: JobCreate, session: SessionDep):
         raise HTTPException(status_code=422, detail="time_end must be after time_start")
 
     # A1: validate every room name exists.
-    known = await session.execute(
-        select(Room.name).where(Room.name.in_(body.spec.rooms))
-    )
+    known = await session.execute(select(Room.name).where(Room.name.in_(body.spec.rooms)))
     known_names = {row[0] for row in known.all()}
     unknown = [r for r in body.spec.rooms if r not in known_names]
     if unknown:

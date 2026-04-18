@@ -86,9 +86,7 @@ async def _event_generator():
                 async with factory() as session:
                     stmt = (
                         select(CsiSample)
-                        .where(
-                            tuple_(CsiSample.time, CsiSample.receiver_id) > tuple_(*cursor)
-                        )
+                        .where(tuple_(CsiSample.time, CsiSample.receiver_id) > tuple_(*cursor))
                         .order_by(CsiSample.time.asc(), CsiSample.receiver_id.asc())
                         .limit(MAX_BATCH)
                     )

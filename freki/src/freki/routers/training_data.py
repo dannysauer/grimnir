@@ -106,9 +106,7 @@ async def get_training_data(
     if not room_list:
         raise HTTPException(status_code=422, detail="rooms must not be empty")
     if len(room_list) > MAX_ROOMS:
-        raise HTTPException(
-            status_code=422, detail=f"rooms must have at most {MAX_ROOMS} entries"
-        )
+        raise HTTPException(status_code=422, detail=f"rooms must have at most {MAX_ROOMS} entries")
 
     stmt = (
         select(TrainingSample)
@@ -133,9 +131,7 @@ async def get_training_data(
 
     has_more = len(samples) > page_size
     page = samples[:page_size]
-    next_cursor = (
-        _encode_cursor(page[-1].time, page[-1].receiver_id) if has_more and page else None
-    )
+    next_cursor = _encode_cursor(page[-1].time, page[-1].receiver_id) if has_more and page else None
 
     return TrainingDataPage(
         rows=[TrainingSampleOut.model_validate(s) for s in page],

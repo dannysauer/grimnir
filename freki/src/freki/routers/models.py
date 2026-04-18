@@ -70,19 +70,16 @@ async def list_models(session: SessionDep, limit: int = 50):
 
 @router.get("/active", response_model=ModelOut)
 async def active_model(session: SessionDep):
-    stmt = (
-        select(
-            TrainedModel.id,
-            TrainedModel.name,
-            TrainedModel.training_job_id,
-            TrainedModel.is_active,
-            TrainedModel.metrics,
-            TrainedModel.feature_config,
-            text("octet_length(model_data) AS size_bytes"),
-            TrainedModel.created_at,
-        )
-        .where(TrainedModel.is_active.is_(True))
-    )
+    stmt = select(
+        TrainedModel.id,
+        TrainedModel.name,
+        TrainedModel.training_job_id,
+        TrainedModel.is_active,
+        TrainedModel.metrics,
+        TrainedModel.feature_config,
+        text("octet_length(model_data) AS size_bytes"),
+        TrainedModel.created_at,
+    ).where(TrainedModel.is_active.is_(True))
     result = await session.execute(stmt)
     row = result.first()
     if row is None:
@@ -183,18 +180,15 @@ async def activate_model(model_id: int, session: SessionDep):
     await session.commit()
 
     # Return the activated model via the standard projection.
-    stmt = (
-        select(
-            TrainedModel.id,
-            TrainedModel.name,
-            TrainedModel.training_job_id,
-            TrainedModel.is_active,
-            TrainedModel.metrics,
-            TrainedModel.feature_config,
-            text("octet_length(model_data) AS size_bytes"),
-            TrainedModel.created_at,
-        )
-        .where(TrainedModel.id == model_id)
-    )
+    stmt = select(
+        TrainedModel.id,
+        TrainedModel.name,
+        TrainedModel.training_job_id,
+        TrainedModel.is_active,
+        TrainedModel.metrics,
+        TrainedModel.feature_config,
+        text("octet_length(model_data) AS size_bytes"),
+        TrainedModel.created_at,
+    ).where(TrainedModel.id == model_id)
     row = (await session.execute(stmt)).one()
     return ModelOut.model_validate(row._mapping)
