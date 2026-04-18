@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nornir"
+version = "0.1.0"
+description = "Nornir — CSI training daemon (claims jobs from Freki, trains models, uploads results)"
+requires-python = ">=3.12"
+dependencies = [
+    "csi-models[features]",
+    "structlog==24.4.0",
+    "prometheus-client==0.21.0",
+    "httpx==0.28.1",
+    "scikit-learn==1.5.2",
+    "numpy==2.1.3",
+    "joblib==1.4.2",
+]
+
+[project.scripts]
+nornir = "nornir.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nornir"]
