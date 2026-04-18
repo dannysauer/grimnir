@@ -13,12 +13,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from csi_models import TrainingDaemon
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from ..db import SessionDep
+from ..ml_auth import require_ml_control_secret
 
 router = APIRouter()
 
@@ -55,7 +56,11 @@ async def list_daemons(session: SessionDep):
 
 
 @router.post("/heartbeat", response_model=DaemonOut)
-async def heartbeat(body: DaemonHeartbeat, session: SessionDep):
+async def heartbeat(
+    body: DaemonHeartbeat,
+    session: SessionDep,
+    _: None = Depends(require_ml_control_secret),
+):
     stmt = (
         insert(TrainingDaemon)
         .values(

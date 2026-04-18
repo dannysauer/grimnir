@@ -50,6 +50,16 @@ modelUploadAuth:
   existingSecret: ""
   secretKey: MODEL_UPLOAD_SHARED_SECRET
 
+# -- Optional shared secret for Nornir's daemon/job control writes.
+# When configured, Freki requires X-Grimnir-ML-Control-Secret on daemon
+# heartbeats plus job claim/heartbeat/complete/fail, and Nornir sends it
+# automatically. This protects machine-only ML control writes; dashboard/API
+# auth for human users is still tracked separately in #5.
+mlControlAuth:
+  sharedSecret: ""
+  existingSecret: ""
+  secretKey: ML_CONTROL_SHARED_SECRET
+
 # ── Geri (UDP aggregator) ───────────────────────────────────────────────────
 
 geri:

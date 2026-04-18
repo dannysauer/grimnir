@@ -32,7 +32,8 @@ _REAP_SQL = text(
         UPDATE training_jobs
            SET status = 'failed',
                completed_at = NOW(),
-               error = 'daemon heartbeat timeout'
+               error = 'daemon heartbeat timeout',
+               claim_token = NULL
          WHERE status = 'running'
            AND heartbeat_at IS NOT NULL
            AND heartbeat_at < NOW() - make_interval(secs => :timeout)

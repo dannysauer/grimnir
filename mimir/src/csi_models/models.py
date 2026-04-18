@@ -181,6 +181,7 @@ class TrainingJob(Base):
     daemon_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_daemons.id", ondelete="SET NULL")
     )
+    claim_token: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

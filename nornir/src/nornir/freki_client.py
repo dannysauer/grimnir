@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+ML_CONTROL_SECRET_HEADER = "X-Grimnir-ML-Control-Secret"
 MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"
 
 
@@ -34,12 +35,14 @@ class FrekiClient:
         self,
         base_url: str,
         timeout_s: float = 30.0,
+        ml_control_shared_secret: str | None = None,
         model_upload_shared_secret: str | None = None,
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=timeout_s,
         )
+        self._ml_control_shared_secret = ml_control_shared_secret or None
         self._model_upload_shared_secret = model_upload_shared_secret or None
 
     async def aclose(self) -> None:
@@ -80,6 +83,13 @@ class FrekiClient:
 
     # ── daemon lifecycle ──────────────────────────────────────────────────────
 
+    def _ml_control_headers(self) -> dict[str, str] | None:
+        if not self._ml_control_shared_secret:
+            return None
+        return {
+            ML_CONTROL_SECRET_HEADER: self._ml_control_shared_secret,
+        }
+
     async def heartbeat_daemon(
         self,
         name: str,
@@ -96,6 +106,7 @@ class FrekiClient:
                 "ip_address": ip_address,
                 "capabilities": capabilities,
             },
+            headers=self._ml_control_headers(),
         )
         return response.json()
 
@@ -116,6 +127,7 @@ class FrekiClient:
                 "POST",
                 f"/api/training-jobs/{job_id}/claim",
                 json_body={"daemon_id": daemon_id},
+                headers=self._ml_control_headers(),
             )
         except FrekiError as exc:
             if exc.status == 409:
@@ -123,17 +135,32 @@ class FrekiClient:
             raise
         return response.json()
 
-    async def heartbeat_job(self, job_id: int) -> None:
-        await self._request("POST", f"/api/training-jobs/{job_id}/heartbeat")
+    async def heartbeat_job(self, job_id: int, daemon_id: int, claim_token: str) -> None:
+        await self._request(
+            "POST",
+            f"/api/training-jobs/{job_id}/heartbeat",
+            json_body={"daemon_id": daemon_id, "claim_token": claim_token},
+            headers=self._ml_control_headers(),
+        )
 
-    async def complete_job(self, job_id: int) -> None:
-        await self._request("POST", f"/api/training-jobs/{job_id}/complete")
+    async def complete_job(self, job_id: int, daemon_id: int, claim_token: str) -> None:
+        await self._request(
+            "POST",
+            f"/api/training-jobs/{job_id}/complete",
+            json_body={"daemon_id": daemon_id, "claim_token": claim_token},
+            headers=self._ml_control_headers(),
+        )
 
-    async def fail_job(self, job_id: int, error: str) -> None:
+    async def fail_job(self, job_id: int, daemon_id: int, claim_token: str, error: str) -> None:
         await self._request(
             "POST",
             f"/api/training-jobs/{job_id}/fail",
-            json_body={"error": error[:2000]},
+            json_body={
+                "daemon_id": daemon_id,
+                "claim_token": claim_token,
+                "error": error[:2000],
+            },
+            headers=self._ml_control_headers(),
         )
 
     # ── training data (cursor-paginated) ──────────────────────────────────────

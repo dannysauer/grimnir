@@ -97,3 +97,14 @@ Name of the Secret holding MODEL_UPLOAD_SHARED_SECRET.
 {{- printf "%s-model-upload" (include "grimnir.fullname" .) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the Secret holding ML_CONTROL_SHARED_SECRET.
+*/}}
+{{- define "grimnir.mlControlSecretName" -}}
+{{- if .Values.mlControlAuth.existingSecret }}
+{{- .Values.mlControlAuth.existingSecret }}
+{{- else }}
+{{- printf "%s-ml-control" (include "grimnir.fullname" .) }}
+{{- end }}
+{{- end }}

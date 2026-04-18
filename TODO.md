@@ -41,7 +41,9 @@ as GitHub issues where noted.
 - [ ] **HTTPS + auth for Freki** — no authentication currently; put behind nginx
       or an API gateway with at minimum HTTP Basic Auth before exposing beyond
       localhost. Narrow mitigation: `MODEL_UPLOAD_SHARED_SECRET` now gates
-      `POST /api/models` when configured, but broader API auth is still open.
+      `POST /api/models` when configured, and `ML_CONTROL_SHARED_SECRET` now
+      gates Nornir's daemon/job ML control writes, but broader API auth is
+      still open.
       _(#5)_
 
 - [x] **Shared-secret gate for model uploads** — optional
@@ -49,6 +51,13 @@ as GitHub issues where noted.
       `X-Grimnir-Model-Upload-Secret` on `POST /api/models`, and Nornir sends
       the same header automatically during model upload.
       _(#29)_
+
+- [x] **ML control auth + running-job ownership** — optional
+      `ML_CONTROL_SHARED_SECRET` now requires
+      `X-Grimnir-ML-Control-Secret` on daemon heartbeats plus job
+      claim/heartbeat/complete/fail, and each claim now gets a per-job token so
+      only the claiming daemon can update that running job.
+      _(#27)_
 
 - [x] **SQL injection in `labels.py`** — `list_labels` previously built a raw SQL
       `INTERVAL` clause from the user-supplied `minutes` parameter; replaced with

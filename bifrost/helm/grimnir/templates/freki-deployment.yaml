@@ -45,6 +45,13 @@ spec:
                   name: {{ include "grimnir.modelUploadSecretName" . }}
                   key: {{ .Values.modelUploadAuth.secretKey }}
             {{- end }}
+            {{- if or .Values.mlControlAuth.existingSecret .Values.mlControlAuth.sharedSecret }}
+            - name: ML_CONTROL_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grimnir.mlControlSecretName" . }}
+                  key: {{ .Values.mlControlAuth.secretKey }}
+            {{- end }}
             - name: PORT
               value: {{ .Values.freki.service.port | toString | quote }}
             {{- range $k, $v := .Values.freki.env }}

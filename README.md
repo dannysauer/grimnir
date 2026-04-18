@@ -90,6 +90,9 @@ Optional hardening:
   `X-Grimnir-Model-Upload-Secret` header on `POST /api/models`.
 - Use the same value for both Freki and Nornir so the training daemon can keep
   uploading models normally.
+- Set `ML_CONTROL_SHARED_SECRET` in `.env` to require the
+  `X-Grimnir-ML-Control-Secret` header on Nornir's daemon heartbeats plus job
+  claim/heartbeat/complete/fail calls.
 
 ### Kubernetes (Helm)
 
@@ -102,6 +105,9 @@ helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
 Optional hardening:
 - Set `modelUploadAuth.sharedSecret` or point `modelUploadAuth.existingSecret`
   at a Secret containing `MODEL_UPLOAD_SHARED_SECRET` to gate model uploads.
+- Set `mlControlAuth.sharedSecret` or point `mlControlAuth.existingSecret` at
+  a Secret containing `ML_CONTROL_SHARED_SECRET` to gate Nornir's ML control
+  writes.
 
 ### Firmware
 

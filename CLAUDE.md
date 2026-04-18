@@ -482,7 +482,7 @@ Helm chart supports optional `ServiceMonitor` resources and a Grafana sidecar
 See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 
 - [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
-- [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth. Narrow mitigation: `POST /api/models` can be gated with `MODEL_UPLOAD_SHARED_SECRET` (#29).
+- [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth. Narrow mitigations: `POST /api/models` can be gated with `MODEL_UPLOAD_SHARED_SECRET` (#29), and Nornir's daemon/job ML control writes can be gated with `ML_CONTROL_SHARED_SECRET` (#27).
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
 - [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
 
@@ -496,7 +496,10 @@ Training and inference run as two separate services:
   `GET /api/training-data`, fits a `RandomForestClassifier`, uploads the
   serialized model to Freki with a `feature_config` JSONB blob, and reports
   status. When `MODEL_UPLOAD_SHARED_SECRET` is set, Nornir sends
-  `X-Grimnir-Model-Upload-Secret` on model uploads. Metrics on `:8001`.
+  `X-Grimnir-Model-Upload-Secret` on model uploads. When
+  `ML_CONTROL_SHARED_SECRET` is set, Nornir sends
+  `X-Grimnir-ML-Control-Secret` on daemon/job control writes, and Freki binds
+  running-job updates to a per-claim token. Metrics on `:8001`.
 
 - **Völva** (`volva/`) — live inference. Polls `/api/models/active`, hot-swaps
   the in-memory classifier when the active model id changes (refusing models

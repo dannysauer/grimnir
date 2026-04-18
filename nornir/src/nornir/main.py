@@ -19,6 +19,7 @@ Environment variables:
   JOB_HEARTBEAT_S          job-row heartbeat cadence (default 15)
   METRICS_PORT             Prometheus port, 0 to disable (default 8001)
   LOG_LEVEL                debug | info | warning | error (default info)
+  ML_CONTROL_SHARED_SECRET shared secret sent on daemon/job ML control writes
   MODEL_UPLOAD_SHARED_SECRET shared secret sent on POST /api/models when set
 
 The training target is the ``label`` column on ``training_samples`` (room
@@ -51,6 +52,7 @@ DAEMON_HEARTBEAT_S = float(os.environ.get("DAEMON_HEARTBEAT_S", "30"))
 JOB_HEARTBEAT_S = float(os.environ.get("JOB_HEARTBEAT_S", "15"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "8001"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
+ML_CONTROL_SHARED_SECRET = os.environ.get("ML_CONTROL_SHARED_SECRET", "")
 MODEL_UPLOAD_SHARED_SECRET = os.environ.get("MODEL_UPLOAD_SHARED_SECRET", "")
 
 CAPABILITIES = {
@@ -85,7 +87,13 @@ def _local_ip() -> str | None:
         return None
 
 
-async def _periodic_job_heartbeat(client: FrekiClient, job_id: int, stop: asyncio.Event) -> None:
+async def _periodic_job_heartbeat(
+    client: FrekiClient,
+    job_id: int,
+    daemon_id: int,
+    claim_token: str,
+    stop: asyncio.Event,
+) -> None:
     """Ping Freki every JOB_HEARTBEAT_S while a job is training."""
     while not stop.is_set():
         try:
@@ -93,7 +101,7 @@ async def _periodic_job_heartbeat(client: FrekiClient, job_id: int, stop: asynci
             return
         except TimeoutError:
             try:
-                await client.heartbeat_job(job_id)
+                await client.heartbeat_job(job_id, daemon_id, claim_token)
             except FrekiError as exc:
                 log.warning("job.heartbeat_failed", job_id=job_id, error=str(exc))
 
@@ -109,11 +117,14 @@ async def _register_daemon(client: FrekiClient) -> int:
     return daemon["id"]
 
 
-async def _execute_job(client: FrekiClient, job: dict) -> None:
+async def _execute_job(client: FrekiClient, job: dict, daemon_id: int) -> None:
     """Run one claimed job to completion: train, upload, report."""
     job_id = job["id"]
+    claim_token = job["claim_token"]
     stop_hb = asyncio.Event()
-    hb_task = asyncio.create_task(_periodic_job_heartbeat(client, job_id, stop_hb))
+    hb_task = asyncio.create_task(
+        _periodic_job_heartbeat(client, job_id, daemon_id, claim_token, stop_hb)
+    )
 
     try:
         try:
@@ -122,7 +133,7 @@ async def _execute_job(client: FrekiClient, job: dict) -> None:
             log.error("job.training_failed", job_id=job_id, error=str(exc))
             jobs_failed.labels(stage="train").inc()
             try:
-                await client.fail_job(job_id, f"training error: {exc}")
+                await client.fail_job(job_id, daemon_id, claim_token, f"training error: {exc}")
             except FrekiError as report_exc:
                 jobs_failed.labels(stage="report").inc()
                 log.error("job.fail_report_failed", job_id=job_id, error=str(report_exc))
@@ -140,14 +151,19 @@ async def _execute_job(client: FrekiClient, job: dict) -> None:
             log.error("job.upload_failed", job_id=job_id, error=str(exc))
             jobs_failed.labels(stage="upload").inc()
             try:
-                await client.fail_job(job_id, f"model upload error: {exc}")
+                await client.fail_job(
+                    job_id,
+                    daemon_id,
+                    claim_token,
+                    f"model upload error: {exc}",
+                )
             except FrekiError as report_exc:
                 jobs_failed.labels(stage="report").inc()
                 log.error("job.fail_report_failed", job_id=job_id, error=str(report_exc))
             return
 
         try:
-            await client.complete_job(job_id)
+            await client.complete_job(job_id, daemon_id, claim_token)
         except FrekiError as exc:
             # Model landed but we couldn't mark complete — log loudly and
             # let the orphan reaper re-queue. Not incrementing completed
@@ -191,7 +207,7 @@ async def _claim_and_run(client: FrekiClient, daemon_id: int) -> bool:
             continue
         jobs_claimed.inc()
         log.info("job.claimed", job_id=claimed["id"], rooms=claimed["spec"]["rooms"])
-        await _execute_job(client, claimed)
+        await _execute_job(client, claimed, daemon_id)
         return True
 
     return False
@@ -219,6 +235,7 @@ async def main() -> None:
         "nornir.starting",
         freki=FREKI_URL,
         daemon_name=DAEMON_NAME,
+        ml_control_secret=bool(ML_CONTROL_SHARED_SECRET),
         model_upload_secret=bool(MODEL_UPLOAD_SHARED_SECRET),
     )
 
@@ -233,6 +250,7 @@ async def main() -> None:
 
     async with FrekiClient(
         FREKI_URL,
+        ml_control_shared_secret=ML_CONTROL_SHARED_SECRET,
         model_upload_shared_secret=MODEL_UPLOAD_SHARED_SECRET,
     ) as client:
         # Retry initial registration until Freki is reachable.

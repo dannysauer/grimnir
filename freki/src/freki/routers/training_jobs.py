@@ -17,16 +17,18 @@ so two daemons racing on the same job cannot both succeed (see review B6).
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime
 from typing import Any, Literal
 
-from csi_models import Room, TrainingJob
+from csi_models import Room, TrainingDaemon, TrainingJob
 from csi_models.features import FeatureConfig
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 
 from ..db import SessionDep
+from ..ml_auth import require_ml_control_secret
 
 router = APIRouter()
 
@@ -69,11 +71,20 @@ class JobOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClaimedJobOut(JobOut):
+    claim_token: str
+
+
 class ClaimBody(BaseModel):
     daemon_id: int
 
 
-class FailBody(BaseModel):
+class JobControlBody(BaseModel):
+    daemon_id: int
+    claim_token: str = Field(min_length=16, max_length=255)
+
+
+class FailBody(JobControlBody):
     error: str
 
 
@@ -112,8 +123,20 @@ async def list_jobs(session: SessionDep, status: JobStatus | None = None, limit:
     return result.scalars().all()
 
 
-@router.post("/{job_id}/claim", response_model=JobOut)
-async def claim_job(job_id: int, body: ClaimBody, session: SessionDep):
+@router.post("/{job_id}/claim", response_model=ClaimedJobOut)
+async def claim_job(
+    job_id: int,
+    body: ClaimBody,
+    session: SessionDep,
+    _: None = Depends(require_ml_control_secret),
+):
+    daemon_exists = await session.scalar(
+        select(TrainingDaemon.id).where(TrainingDaemon.id == body.daemon_id)
+    )
+    if daemon_exists is None:
+        raise HTTPException(status_code=404, detail="Unknown daemon_id")
+
+    claim_token = secrets.token_urlsafe(32)
     # B6: single conditional UPDATE — empty result means someone else won.
     stmt = (
         update(TrainingJob)
@@ -121,6 +144,7 @@ async def claim_job(job_id: int, body: ClaimBody, session: SessionDep):
         .values(
             status="running",
             daemon_id=body.daemon_id,
+            claim_token=claim_token,
             claimed_at=func.now(),
             heartbeat_at=func.now(),
         )
@@ -137,10 +161,20 @@ async def claim_job(job_id: int, body: ClaimBody, session: SessionDep):
 
 
 @router.post("/{job_id}/heartbeat", response_model=JobOut)
-async def heartbeat_job(job_id: int, session: SessionDep):
+async def heartbeat_job(
+    job_id: int,
+    body: JobControlBody,
+    session: SessionDep,
+    _: None = Depends(require_ml_control_secret),
+):
     stmt = (
         update(TrainingJob)
-        .where(TrainingJob.id == job_id, TrainingJob.status == "running")
+        .where(
+            TrainingJob.id == job_id,
+            TrainingJob.status == "running",
+            TrainingJob.daemon_id == body.daemon_id,
+            TrainingJob.claim_token == body.claim_token,
+        )
         .values(heartbeat_at=func.now())
         .returning(TrainingJob)
     )
@@ -148,41 +182,66 @@ async def heartbeat_job(job_id: int, session: SessionDep):
     job = result.scalar_one_or_none()
     if job is None:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Job is not running")
+        raise HTTPException(status_code=409, detail="Job is not running for this daemon")
     await session.commit()
     return job
 
 
 @router.post("/{job_id}/complete", response_model=JobOut)
-async def complete_job(job_id: int, session: SessionDep):
+async def complete_job(
+    job_id: int,
+    body: JobControlBody,
+    session: SessionDep,
+    _: None = Depends(require_ml_control_secret),
+):
     stmt = (
         update(TrainingJob)
-        .where(TrainingJob.id == job_id, TrainingJob.status == "running")
-        .values(status="complete", completed_at=func.now())
+        .where(
+            TrainingJob.id == job_id,
+            TrainingJob.status == "running",
+            TrainingJob.daemon_id == body.daemon_id,
+            TrainingJob.claim_token == body.claim_token,
+        )
+        .values(status="complete", completed_at=func.now(), claim_token=None)
         .returning(TrainingJob)
     )
     result = await session.execute(stmt)
     job = result.scalar_one_or_none()
     if job is None:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Job is not running")
+        raise HTTPException(status_code=409, detail="Job is not running for this daemon")
     await session.commit()
     return job
 
 
 @router.post("/{job_id}/fail", response_model=JobOut)
-async def fail_job(job_id: int, body: FailBody, session: SessionDep):
+async def fail_job(
+    job_id: int,
+    body: FailBody,
+    session: SessionDep,
+    _: None = Depends(require_ml_control_secret),
+):
     stmt = (
         update(TrainingJob)
-        .where(TrainingJob.id == job_id, TrainingJob.status == "running")
-        .values(status="failed", completed_at=func.now(), error=body.error)
+        .where(
+            TrainingJob.id == job_id,
+            TrainingJob.status == "running",
+            TrainingJob.daemon_id == body.daemon_id,
+            TrainingJob.claim_token == body.claim_token,
+        )
+        .values(
+            status="failed",
+            completed_at=func.now(),
+            error=body.error,
+            claim_token=None,
+        )
         .returning(TrainingJob)
     )
     result = await session.execute(stmt)
     job = result.scalar_one_or_none()
     if job is None:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Job is not running")
+        raise HTTPException(status_code=409, detail="Job is not running for this daemon")
     await session.commit()
     return job
 
@@ -195,7 +254,7 @@ async def cancel_job(job_id: int, session: SessionDep):
             TrainingJob.id == job_id,
             TrainingJob.status.in_(["queued", "running"]),
         )
-        .values(status="cancelled", completed_at=func.now())
+        .values(status="cancelled", completed_at=func.now(), claim_token=None)
         .returning(TrainingJob)
     )
     result = await session.execute(stmt)
