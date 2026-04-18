@@ -4,17 +4,23 @@ main.py — CSI Backend (FastAPI)
 Startup sequence:
   1. Run bundled SQL bootstrap migrations (idempotent)
   2. Initialise SQLAlchemy async engine
-  3. Serve FastAPI via uvicorn
+  3. Start background tasks (orphan reaper)
+  4. Serve FastAPI via uvicorn
 
 Environment variables:
-  DATABASE_URL  postgresql+asyncpg://user:pass@host:5432/csi
-  HOST          bind address (default 0.0.0.0)
-  PORT          bind port (default 8000)
-  LOG_LEVEL     debug | info | warning | error (default info)
+  DATABASE_URL               postgresql+asyncpg://user:pass@host:5432/csi
+  HOST                       bind address (default 0.0.0.0)
+  PORT                       bind port (default 8000)
+  LOG_LEVEL                  debug | info | warning | error (default info)
+  ORPHAN_CHECK_INTERVAL_S    reaper poll interval (default 60)
+  ORPHAN_TIMEOUT_S           training job heartbeat timeout (default 300)
+  CSI_STREAM_INTERVAL_MS     /api/csi-stream poll interval (default 200)
+  CSI_STREAM_MAX_BATCH       /api/csi-stream max rows per tick (default 200)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import pathlib
@@ -28,7 +34,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from .routers import history, labels, rooms, stream
+from .orphan_reaper import reaper_loop
+from .routers import (
+    csi_stream,
+    history,
+    labels,
+    models,
+    predictions,
+    rooms,
+    stream,
+    training_daemons,
+    training_data,
+    training_jobs,
+)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 HOST = os.environ.get("HOST", "0.0.0.0")
@@ -54,14 +72,24 @@ log = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
     log.info("backend.starting")
     log.info("migrations.running")
     run_migrations(DATABASE_URL)
     log.info("migrations.done")
     init_engine(DATABASE_URL)
     log.info("db.engine_initialised")
+
+    app.state.orphan_reaper_task = asyncio.create_task(reaper_loop())
+
     yield
+
+    app.state.orphan_reaper_task.cancel()
+    try:
+        await app.state.orphan_reaper_task
+    except asyncio.CancelledError:
+        pass
+
     engine = get_engine()
     await engine.dispose()
     log.info("backend.stopped")
@@ -77,9 +105,15 @@ app.add_middleware(
 )
 
 app.include_router(stream.router, prefix="/api")
+app.include_router(csi_stream.router, prefix="/api/csi-stream")
 app.include_router(history.router, prefix="/api/history")
 app.include_router(labels.router, prefix="/api/labels")
 app.include_router(rooms.router, prefix="/api/rooms")
+app.include_router(training_daemons.router, prefix="/api/training-daemons")
+app.include_router(training_jobs.router, prefix="/api/training-jobs")
+app.include_router(training_data.router, prefix="/api/training-data")
+app.include_router(models.router, prefix="/api/models")
+app.include_router(predictions.router, prefix="/api/predictions")
 
 # Instrument all HTTP endpoints and expose /metrics.
 # Health and metrics endpoints are excluded from request duration tracking.

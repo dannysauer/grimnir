@@ -1,0 +1,81 @@
+"""
+routers/training_daemons.py
+
+GET  /api/training-daemons           list registered Nornir daemons
+POST /api/training-daemons/heartbeat upsert a daemon by name and bump last_seen
+
+Daemons (Nornir instances) call the heartbeat endpoint on startup and on a
+configurable interval; Hlidskjalf lists them to show which daemons are online.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from csi_models import TrainingDaemon
+from fastapi import APIRouter
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
+
+from ..db import SessionDep
+
+router = APIRouter()
+
+
+# ── Pydantic schemas ──────────────────────────────────────────────────────────
+
+
+class DaemonHeartbeat(BaseModel):
+    name: str
+    host: str
+    ip_address: str | None = None
+    capabilities: dict = {}
+
+
+class DaemonOut(BaseModel):
+    id: int
+    name: str
+    host: str
+    ip_address: str | None
+    capabilities: dict
+    last_seen: datetime
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.get("", response_model=list[DaemonOut])
+async def list_daemons(session: SessionDep):
+    result = await session.execute(select(TrainingDaemon).order_by(TrainingDaemon.name.asc()))
+    return result.scalars().all()
+
+
+@router.post("/heartbeat", response_model=DaemonOut)
+async def heartbeat(body: DaemonHeartbeat, session: SessionDep):
+    stmt = (
+        insert(TrainingDaemon)
+        .values(
+            name=body.name,
+            host=body.host,
+            ip_address=body.ip_address,
+            capabilities=body.capabilities,
+        )
+        .on_conflict_do_update(
+            index_elements=["name"],
+            set_={
+                "host": body.host,
+                "ip_address": body.ip_address,
+                "capabilities": body.capabilities,
+                "last_seen": func.now(),
+            },
+        )
+        .returning(TrainingDaemon)
+    )
+    result = await session.execute(stmt)
+    daemon = result.scalar_one()
+    await session.commit()
+    return daemon
