@@ -32,14 +32,18 @@ import json
 from datetime import datetime
 from typing import Annotated
 
-from csi_models import TrainingSample
+import structlog
+from csi_models import CsiSample, TrainingSample
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, tuple_
+from sqlalchemy.exc import DBAPIError
 
 from ..db import SessionDep
+from ..training_samples_access import is_training_samples_permission_error
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 
 DEFAULT_PAGE_SIZE = 500
 MAX_PAGE_SIZE = 5000
@@ -87,6 +91,35 @@ def _decode_cursor(cursor: str) -> tuple[datetime, int]:
         raise HTTPException(status_code=422, detail=f"Invalid cursor: {exc}") from exc
 
 
+def _training_query(
+    model: type[TrainingSample] | type[CsiSample],
+    *,
+    time_start: datetime,
+    time_end: datetime,
+    room_list: list[str],
+    cursor: str | None,
+    page_size: int,
+):
+    stmt = (
+        select(model)
+        .where(
+            model.time >= time_start,
+            model.time < time_end,
+            model.label.in_(room_list),
+        )
+        .order_by(model.time.asc(), model.receiver_id.asc())
+        .limit(page_size + 1)
+    )
+
+    if cursor is not None:
+        cursor_time, cursor_receiver_id = _decode_cursor(cursor)
+        stmt = stmt.where(
+            tuple_(model.time, model.receiver_id) > tuple_(cursor_time, cursor_receiver_id)
+        )
+
+    return stmt
+
+
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
 
@@ -108,26 +141,34 @@ async def get_training_data(
     if len(room_list) > MAX_ROOMS:
         raise HTTPException(status_code=422, detail=f"rooms must have at most {MAX_ROOMS} entries")
 
-    stmt = (
-        select(TrainingSample)
-        .where(
-            TrainingSample.time >= time_start,
-            TrainingSample.time < time_end,
-            TrainingSample.label.in_(room_list),
+    try:
+        result = await session.execute(
+            _training_query(
+                TrainingSample,
+                time_start=time_start,
+                time_end=time_end,
+                room_list=room_list,
+                cursor=cursor,
+                page_size=page_size,
+            )
         )
-        .order_by(TrainingSample.time.asc(), TrainingSample.receiver_id.asc())
-        .limit(page_size + 1)  # overshoot by one so we can detect "has more"
-    )
-
-    if cursor is not None:
-        cursor_time, cursor_receiver_id = _decode_cursor(cursor)
-        stmt = stmt.where(
-            tuple_(TrainingSample.time, TrainingSample.receiver_id)
-            > tuple_(cursor_time, cursor_receiver_id)
+        samples = result.scalars().all()
+    except DBAPIError as exc:
+        await session.rollback()
+        if not is_training_samples_permission_error(exc):
+            raise
+        log.warning("training_data.fallback_to_csi_samples", reason="permission_denied")
+        result = await session.execute(
+            _training_query(
+                CsiSample,
+                time_start=time_start,
+                time_end=time_end,
+                room_list=room_list,
+                cursor=cursor,
+                page_size=page_size,
+            )
         )
-
-    result = await session.execute(stmt)
-    samples = result.scalars().all()
+        samples = result.scalars().all()
 
     has_more = len(samples) > page_size
     page = samples[:page_size]

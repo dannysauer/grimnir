@@ -10,15 +10,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import structlog
 from csi_models import CsiSample, Label
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from ..db import SessionDep
+from ..training_samples_access import is_training_samples_permission_error
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -56,6 +59,69 @@ class LabelOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+async def _insert_training_samples_for_window(
+    session: SessionDep,
+    start: datetime,
+    end: datetime,
+) -> None:
+    await session.execute(
+        text("""
+            INSERT INTO training_samples
+            SELECT time, receiver_id, transmitter_mac, rssi, noise_floor,
+                   channel, bandwidth, antenna_count, subcarrier_count,
+                   amplitude, phase, raw_bytes, label
+            FROM csi_samples
+            WHERE time >= :start AND time < :end AND label IS NOT NULL
+            ON CONFLICT (time, receiver_id) DO UPDATE SET label = EXCLUDED.label
+        """),
+        {"start": start, "end": end},
+    )
+
+
+async def _sync_training_samples_best_effort(
+    session: SessionDep,
+    start: datetime,
+    end: datetime,
+) -> None:
+    try:
+        await _insert_training_samples_for_window(session, start, end)
+        await session.commit()
+    except DBAPIError as exc:
+        await session.rollback()
+        if not is_training_samples_permission_error(exc):
+            raise
+        log.warning(
+            "training_samples.sync_skipped",
+            reason="permission_denied",
+            start=start.isoformat(),
+            end=end.isoformat(),
+        )
+
+
+async def _resync_training_samples_best_effort(
+    session: SessionDep,
+    start: datetime,
+    end: datetime,
+) -> None:
+    try:
+        await session.execute(
+            text("DELETE FROM training_samples WHERE time >= :start AND time < :end"),
+            {"start": start, "end": end},
+        )
+        await _insert_training_samples_for_window(session, start, end)
+        await session.commit()
+    except DBAPIError as exc:
+        await session.rollback()
+        if not is_training_samples_permission_error(exc):
+            raise
+        log.warning(
+            "training_samples.resync_skipped",
+            reason="permission_denied",
+            start=start.isoformat(),
+            end=end.isoformat(),
+        )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -98,23 +164,9 @@ async def create_label(body: LabelCreate, session: SessionDep):
         )
         .values(label=body.room)
     )
-
-    # Bulk-sync labeled rows to training_samples (single INSERT, not per-row trigger)
-    await session.execute(
-        text("""
-            INSERT INTO training_samples
-            SELECT time, receiver_id, transmitter_mac, rssi, noise_floor,
-                   channel, bandwidth, antenna_count, subcarrier_count,
-                   amplitude, phase, raw_bytes, label
-            FROM csi_samples
-            WHERE time >= :start AND time < :end AND label IS NOT NULL
-            ON CONFLICT (time, receiver_id) DO UPDATE SET label = EXCLUDED.label
-        """),
-        {"start": body.time_start, "end": body.time_end},
-    )
-
     await session.commit()
     await session.refresh(label)
+    await _sync_training_samples_best_effort(session, body.time_start, body.time_end)
     return label
 
 
@@ -124,6 +176,8 @@ async def delete_label(label_id: int, session: SessionDep):
     label = result.scalar_one_or_none()
     if label is None:
         raise HTTPException(status_code=404, detail="Label not found")
+    window_start = label.time_start
+    window_end = label.time_end
 
     # Clear labels in the deleted window, then re-apply any surviving
     # overlapping labels so deleting one label does not erase another.
@@ -162,21 +216,5 @@ async def delete_label(label_id: int, session: SessionDep):
 
     # Sync training_samples: clear the deleted window, then re-add whatever
     # survived (from overlapping labels re-applied to csi_samples above).
-    await session.execute(
-        text("DELETE FROM training_samples WHERE time >= :start AND time < :end"),
-        {"start": label.time_start, "end": label.time_end},
-    )
-    await session.execute(
-        text("""
-            INSERT INTO training_samples
-            SELECT time, receiver_id, transmitter_mac, rssi, noise_floor,
-                   channel, bandwidth, antenna_count, subcarrier_count,
-                   amplitude, phase, raw_bytes, label
-            FROM csi_samples
-            WHERE time >= :start AND time < :end AND label IS NOT NULL
-            ON CONFLICT (time, receiver_id) DO UPDATE SET label = EXCLUDED.label
-        """),
-        {"start": label.time_start, "end": label.time_end},
-    )
-
     await session.commit()
+    await _resync_training_samples_best_effort(session, window_start, window_end)
