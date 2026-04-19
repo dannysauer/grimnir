@@ -22,6 +22,10 @@
       matchManagers: ["github-actions"],
       groupName: "github-actions",
       pinDigests: true,
+      automerge: true,
+      automergeType: "pr",
+      minimumReleaseAge: "3 days",
+      matchUpdateTypes: ["minor", "patch", "digest", "pin", "pinDigest"],
     },
     {
       // Batch all Dockerfile FROM image updates into one PR.
@@ -30,13 +34,23 @@
       matchManagers: ["dockerfile"],
       groupName: "docker-base-images",
       pinDigests: true,
+      automerge: true,
+      automergeType: "pr",
+      minimumReleaseAge: "3 days",
+      matchUpdateTypes: ["minor", "patch", "digest", "pin", "pinDigest"],
     },
     {
       // Batch geri + freki Python dependency bumps into one PR.
       // Both pyproject.toml files use [project] dependencies (pep621 manager).
+      // Only automerge stable non-major bumps; 0.x releases may be breaking.
       description: "Group Python dependency updates",
       matchManagers: ["pep621"],
       groupName: "python-dependencies",
+      matchCurrentVersion: "!/^0/",
+      automerge: true,
+      automergeType: "pr",
+      minimumReleaseAge: "3 days",
+      matchUpdateTypes: ["minor", "patch"],
     },
     {
       // Batch PlatformIO platform and lib_deps bumps into one PR.
