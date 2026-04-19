@@ -16,6 +16,12 @@ as GitHub issues where noted.
 
 ## CI/CD
 
+- [x] **GitHub Actions patch pinning + agent workflow guidance** — workflow
+      `uses:` references now pin full upstream release tags instead of floating
+      majors, and agent guidance now requires issue-first tracking for
+      substantial work.
+      _(#33)_
+
 - [x] **Renovate integration** — `renovate.json5` added; manages Python deps,
       Docker base images (SHA-pinned), GitHub Actions (SHA-pinned), and
       PlatformIO platform versions. Updates grouped per manager.

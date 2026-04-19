@@ -55,6 +55,17 @@ repos:
     hooks:
       - id: actionlint
 
+  # ── GitHub Actions version pinning ──────────────────────────────────────────
+  # External workflow actions must use full semver tags (vX.Y.Z), not floating
+  # majors like @v4 or @v6.
+  - repo: local
+    hooks:
+      - id: github-action-full-semver-pins
+        name: Require full GitHub Action version pins
+        entry: uses:\s*[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@(?!v\d+\.\d+\.\d+$)\S+$
+        language: pygrep
+        files: ^\.github/workflows/.*\.ya?ml$
+
 ci:
   # pre-commit.ci auto-fixes and pushes corrections back on PRs.
   # Skip hooks that need network access at fix time.

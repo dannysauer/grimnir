@@ -200,10 +200,28 @@ options, API endpoints, or breaking changes, **always** update:
 3. **`README.md`** — if the change is user-visible (new quick-start step,
    new component, changed endpoint, etc.)
 4. **`pyproject.toml`** — add any new runtime dependencies with pinned versions
-5. **GitHub issues** — create issues for significant follow-up work via the
-   `mcp__github__issue_write` tool
+5. **GitHub issues** — create or update the tracking issue / epic for the work,
+   and close completed issues after the changes land on `main`
 
 These updates are not optional — they ensure continuity across agent sessions.
+
+## Work Tracking Requirements
+
+- Substantial work starts with a tracking issue. If the work is broad enough to
+  split cleanly, open a parent epic and use sub-issues.
+- Keep `TODO.md` aligned with the issue tracker for repo-level work.
+- Reference issue numbers in follow-up notes and close completed issues once the
+  implementation is merged or pushed to `main`.
+
+## GitHub Actions Requirements
+
+- Every third-party GitHub Action in workflow `uses:` entries must be pinned to
+  a full upstream release tag such as `actions/checkout@v6.0.2`.
+- Never use floating major tags like `@v4` or `@v6` in committed workflows.
+- Before changing an action version, verify the current tag from the upstream
+  action repository release page or API.
+- The repo pre-commit config enforces this rule; keep that check passing rather
+  than bypassing it.
 
 ## Code Style
 

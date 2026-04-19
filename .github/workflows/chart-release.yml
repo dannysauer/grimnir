@@ -37,12 +37,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
       - name: Install Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5.0.0
 
       - name: Calculate next chart version
         id: version
@@ -120,7 +120,7 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.version.outputs.release == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -184,7 +184,7 @@ jobs:
 
       - name: Create GitHub release for chart
         if: steps.version.outputs.release == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.0
         with:
           tag_name: chart-v${{ steps.version.outputs.chart_version }}
           name: "chart-v${{ steps.version.outputs.chart_version }}"
