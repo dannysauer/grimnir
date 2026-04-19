@@ -135,10 +135,32 @@ jobs:
               fh.write(f"list={' '.join(services)}\n")
           PY
 
+  tests:
+    name: Pytest
+    needs: [version]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .tool-versions
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e mimir[features] -e geri[test] -e freki[test]
+
+      - name: Run pytest
+        run: pytest geri/tests freki/tests
+
   # ── Build and push container images ───────────────────────────────────────
   images:
     name: Build images (${{ matrix.service }})
-    needs: [version, services]
+    needs: [version, services, tests]
     if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
 

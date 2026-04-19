@@ -17,6 +17,11 @@ dependencies = [
     "prometheus-client==0.21.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest==9.0.3",
+]
+
 [project.scripts]
 geri = "geri.main:run"
 
