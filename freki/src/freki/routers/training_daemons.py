@@ -14,7 +14,7 @@ from datetime import datetime
 
 from csi_models import TrainingDaemon
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -31,7 +31,7 @@ class DaemonHeartbeat(BaseModel):
     name: str
     host: str
     ip_address: str | None = None
-    capabilities: dict = {}
+    capabilities: dict = Field(default_factory=dict)
 
 
 class DaemonOut(BaseModel):
@@ -45,6 +45,11 @@ class DaemonOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("ip_address", mode="before")
+    @classmethod
+    def stringify_ip_address(cls, value: object) -> object:
+        return str(value) if value is not None else None
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -52,7 +57,7 @@ class DaemonOut(BaseModel):
 @router.get("", response_model=list[DaemonOut])
 async def list_daemons(session: SessionDep):
     result = await session.execute(select(TrainingDaemon).order_by(TrainingDaemon.name.asc()))
-    return result.scalars().all()
+    return [DaemonOut.model_validate(daemon) for daemon in result.scalars().all()]
 
 
 @router.post("/heartbeat", response_model=DaemonOut)
@@ -83,4 +88,4 @@ async def heartbeat(
     result = await session.execute(stmt)
     daemon = result.scalar_one()
     await session.commit()
-    return daemon
+    return DaemonOut.model_validate(daemon)

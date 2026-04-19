@@ -16,6 +16,8 @@ GET /api/history/receivers
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from csi_models import CsiSample, Receiver, ReceiverHeartbeat
 from fastapi import APIRouter, Query
 from sqlalchemy import select, text
@@ -36,6 +38,7 @@ async def get_variance(
     Falls back to raw csi_samples if the aggregate has no data yet
     (e.g. immediately after first startup).
     """
+    cutoff = datetime.now(tz=UTC) - timedelta(minutes=minutes)
     result = await session.execute(
         text(
             """
@@ -46,11 +49,11 @@ async def get_variance(
                 sample_count
             FROM csi_variance_1min
             WHERE receiver_id = :rx_id
-              AND bucket >= NOW() - (:minutes || ' minutes')::INTERVAL
+              AND bucket >= :cutoff
             ORDER BY bucket ASC
             """
         ),
-        {"rx_id": receiver_id, "minutes": minutes},
+        {"rx_id": receiver_id, "cutoff": cutoff},
     )
     rows = result.mappings().all()
 
@@ -66,12 +69,12 @@ async def get_variance(
                     COUNT(*)                      AS sample_count
                 FROM csi_samples
                 WHERE receiver_id = :rx_id
-                  AND time >= NOW() - (:minutes || ' minutes')::INTERVAL
+                  AND time >= :cutoff
                 GROUP BY 1
                 ORDER BY 1 ASC
                 """
             ),
-            {"rx_id": receiver_id, "minutes": minutes},
+            {"rx_id": receiver_id, "cutoff": cutoff},
         )
         rows = result.mappings().all()
 

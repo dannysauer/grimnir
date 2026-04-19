@@ -11,6 +11,14 @@ class FakeScalarSequence:
         return list(self._values)
 
 
+class FakeMappingSequence:
+    def __init__(self, values: Sequence[object]):
+        self._values = list(values)
+
+    def all(self) -> list[object]:
+        return list(self._values)
+
+
 class FakeExecuteResult:
     def __init__(
         self,
@@ -20,12 +28,14 @@ class FakeExecuteResult:
         first_value: object | None = None,
         one_value: object | None = None,
         scalars_values: Sequence[object] | None = None,
+        mappings_values: Sequence[object] | None = None,
     ) -> None:
         self._all_rows = list(all_rows or [])
         self._scalar_value = scalar_value
         self._first_value = first_value
         self._one_value = one_value
         self._scalars_values = list(scalars_values or [])
+        self._mappings_values = list(mappings_values or [])
 
     def all(self) -> list[object]:
         return list(self._all_rows)
@@ -51,6 +61,9 @@ class FakeExecuteResult:
 
     def scalars(self) -> FakeScalarSequence:
         return FakeScalarSequence(self._scalars_values)
+
+    def mappings(self) -> FakeMappingSequence:
+        return FakeMappingSequence(self._mappings_values)
 
 
 class FakeSession:
@@ -78,6 +91,8 @@ class FakeSession:
         if not self.execute_results:
             raise AssertionError("Unexpected execute() call")
         result = self.execute_results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
         return result
 
     async def scalar(self, statement: object, *args: object, **kwargs: object) -> object:
