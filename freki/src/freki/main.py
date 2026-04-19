@@ -56,20 +56,34 @@ PORT = int(os.environ.get("PORT", "8000"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info")
 FRONTEND_DIR = os.environ.get("FRONTEND_DIR", "/app/frontend")
 
+_log_level_int = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
+_shared_processors = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.add_logger_name,
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.TimeStamper(fmt="iso"),
+    structlog.processors.ExceptionRenderer(),
+]
 structlog.configure(
     processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
+        *_shared_processors,
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(
-        getattr(logging, LOG_LEVEL.upper(), logging.INFO)
-    ),
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.make_filtering_bound_logger(_log_level_int),
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
+    cache_logger_on_first_use=True,
 )
+_handler = logging.StreamHandler()
+_handler.setFormatter(
+    structlog.stdlib.ProcessorFormatter(
+        processor=structlog.processors.JSONRenderer(),
+        foreign_pre_chain=_shared_processors,
+    )
+)
+logging.root.handlers = [_handler]
+logging.root.setLevel(_log_level_int)
 log = structlog.get_logger(__name__)
 
 
@@ -142,6 +156,7 @@ def run() -> None:
         host=HOST,
         port=PORT,
         log_level=LOG_LEVEL.lower(),
+        log_config=None,  # preserve our structlog stdlib bridge; uvicorn default overrides it
         access_log=False,  # request metrics are handled by Prometheus instrumentator
         reload=False,
     )

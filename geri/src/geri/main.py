@@ -44,18 +44,34 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
 # Set to 0 to disable the Prometheus HTTP server
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "8001"))
 
+_log_level_int = getattr(logging, LOG_LEVEL, logging.INFO)
+_shared_processors = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.add_logger_name,
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.TimeStamper(fmt="iso"),
+    structlog.processors.ExceptionRenderer(),
+]
 structlog.configure(
     processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
+        *_shared_processors,
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, LOG_LEVEL, logging.INFO)),
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.make_filtering_bound_logger(_log_level_int),
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
+    cache_logger_on_first_use=True,
 )
+_handler = logging.StreamHandler()
+_handler.setFormatter(
+    structlog.stdlib.ProcessorFormatter(
+        processor=structlog.processors.JSONRenderer(),
+        foreign_pre_chain=_shared_processors,
+    )
+)
+logging.root.handlers = [_handler]
+logging.root.setLevel(_log_level_int)
 log = structlog.get_logger(__name__)
 
 # ── UDP Protocol ──────────────────────────────────────────────────────────────
