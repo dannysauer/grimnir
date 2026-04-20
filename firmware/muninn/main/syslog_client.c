@@ -51,7 +51,7 @@ typedef struct {
 static QueueHandle_t    s_syslog_queue = NULL;
 static int              s_syslog_sock = -1;
 static struct sockaddr_in s_syslog_addr;
-static char             s_receiver_name[32];
+static char             s_receiver_name[RECEIVER_NAME_MAX_LEN + 1];
 static vprintf_like_t   s_orig_vprintf = NULL;
 
 static uint16_t read_be16(const uint8_t *buf)

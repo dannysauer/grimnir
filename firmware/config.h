@@ -42,6 +42,9 @@
 
 // Unique name for this receiver — change before flashing each board.
 // This name appears in the dashboard and is used as the DB receiver name.
+#ifndef RECEIVER_NAME_MAX_LEN
+#  define RECEIVER_NAME_MAX_LEN 32
+#endif
 #ifndef RECEIVER_NAME
 #  define RECEIVER_NAME       "rx_ground"   // e.g. "grimnir-rx-library", "grimnir-rx-kitchen"
 #endif

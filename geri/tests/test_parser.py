@@ -3,13 +3,20 @@ from __future__ import annotations
 import struct
 
 import pytest
-from geri.parser import HEADER_FORMAT, HEADER_SIZE, PACKET_MAGIC, ParseError, parse_packet
+from geri.parser import (
+    HEADER_FORMAT_V1,
+    HEADER_FORMAT_V2,
+    HEADER_SIZE_V1,
+    PACKET_MAGIC,
+    ParseError,
+    parse_packet,
+)
 
 
 def _build_packet(
     *,
     magic: int = PACKET_MAGIC,
-    version: int = 1,
+    version: int = 2,
     receiver_name: str = "rx_ground",
     transmitter_mac: bytes = b"\xaa\xbb\xcc\xdd\xee\xff",
     rssi: int = -47,
@@ -23,16 +30,18 @@ def _build_packet(
     phase: list[float] | None = None,
 ) -> bytes:
     n_values = antenna_count * subcarrier_count
+    header_format = HEADER_FORMAT_V1 if version == 1 else HEADER_FORMAT_V2
+    receiver_name_len = 16 if version == 1 else 32
     if amplitude is None:
         amplitude = [float(i) for i in range(1, n_values + 1)]
     if phase is None:
         phase = [float(i) * -0.5 for i in range(1, n_values + 1)]
 
     header = struct.pack(
-        HEADER_FORMAT,
+        header_format,
         magic,
         version,
-        receiver_name.encode("ascii").ljust(16, b"\x00"),
+        receiver_name.encode("ascii").ljust(receiver_name_len, b"\x00"),
         transmitter_mac,
         rssi,
         noise_floor,
@@ -62,6 +71,18 @@ def test_parse_packet_round_trips_valid_payload() -> None:
     assert packet.phase == [-0.5, -1.0, -1.5, -2.0, -2.5, -3.0]
 
 
+def test_parse_packet_v1_remains_supported() -> None:
+    packet = parse_packet(_build_packet(version=1, receiver_name="grimnir-rx-old"))
+
+    assert packet.receiver_name == "grimnir-rx-old"
+
+
+def test_parse_packet_v2_supports_longer_receiver_names() -> None:
+    packet = parse_packet(_build_packet(receiver_name="grimnir-rx-office-west"))
+
+    assert packet.receiver_name == "grimnir-rx-office-west"
+
+
 def test_parse_packet_trims_receiver_name_padding() -> None:
     packet = parse_packet(_build_packet(receiver_name="rx_upstairs"))
     assert packet.receiver_name == "rx_upstairs"
@@ -69,7 +90,7 @@ def test_parse_packet_trims_receiver_name_padding() -> None:
 
 def test_parse_packet_rejects_short_header() -> None:
     with pytest.raises(ParseError, match="Packet too short"):
-        parse_packet(b"\x00" * (HEADER_SIZE - 1))
+        parse_packet(b"\x00" * (HEADER_SIZE_V1 - 1))
 
 
 def test_parse_packet_rejects_bad_magic() -> None:
@@ -79,7 +100,7 @@ def test_parse_packet_rejects_bad_magic() -> None:
 
 def test_parse_packet_rejects_unknown_version() -> None:
     with pytest.raises(ParseError, match="Unknown version"):
-        parse_packet(_build_packet(version=2))
+        parse_packet(_build_packet(version=99))
 
 
 def test_parse_packet_rejects_short_float_payload() -> None:

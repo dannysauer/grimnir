@@ -24,8 +24,9 @@ Edit `firmware/config.h` with your values:
 #define AGGREGATOR_HOST     "csi-aggregator.home.example.com"
 
 // Unique name for this board — visible in the dashboard and stored in the DB.
-// Change for each Muninn you flash: "rx_ground", "rx_upstairs", etc.
-#define RECEIVER_NAME       "rx_ground"
+// Change for each Muninn you flash: "grimnir-rx-office-west", etc.
+// The current wire format supports up to 32 bytes.
+#define RECEIVER_NAME       "grimnir-rx-office-west"
 
 // Optional Muninn watchdog overrides. Defaults are usually fine.
 // If CSI is still flowing but Geri ACKs stop for too long, the receiver reboots.
@@ -211,9 +212,9 @@ pio run -t upload --upload-port /dev/ttyACM0
 Each Muninn must have a unique `RECEIVER_NAME` in `firmware/config.h`.
 The recommended workflow for multiple boards:
 
-1. Edit `config.h` — set `RECEIVER_NAME = "rx_ground"`
+1. Edit `config.h` — set `RECEIVER_NAME = "grimnir-rx-ground-floor"`
 2. Flash board 1
-3. Edit `config.h` — set `RECEIVER_NAME = "rx_upstairs"`
+3. Edit `config.h` — set `RECEIVER_NAME = "grimnir-rx-upstairs-east"`
 4. Flash board 2
 5. Repeat for additional boards
 

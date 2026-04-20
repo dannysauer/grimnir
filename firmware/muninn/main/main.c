@@ -8,17 +8,17 @@
 //
 // UDP packet format (little-endian):
 //   [0..3]    magic     uint32  0x43534921 ("CSI!")
-//   [4..5]    version   uint16  1
-//   [6..21]   name      char[16] null-padded receiver name
-//   [22..27]  tx_mac    uint8[6] transmitter MAC
-//   [28..29]  rssi      int16   dBm
-//   [30..31]  noise     int16   dBm
-//   [32..33]  channel   uint16
-//   [34..35]  bw        uint16  MHz
-//   [36..37]  antennas  uint16
-//   [38..39]  subcarriers uint16
-//   [40..43]  ts_us     uint32  device uptime micros
-//   [44..N]   amplitude float32[] antenna_count * subcarrier_count
+//   [4..5]    version   uint16  2
+//   [6..37]   name      char[32] null-padded receiver name
+//   [38..43]  tx_mac    uint8[6] transmitter MAC
+//   [44..45]  rssi      int16   dBm
+//   [46..47]  noise     int16   dBm
+//   [48..49]  channel   uint16
+//   [50..51]  bw        uint16  MHz
+//   [52..53]  antennas  uint16
+//   [54..55]  subcarriers uint16
+//   [56..59]  ts_us     uint32  device uptime micros
+//   [60..N]   amplitude float32[] antenna_count * subcarrier_count
 //   [N..M]    phase     float32[] antenna_count * subcarrier_count
 // =============================================================================
 
@@ -45,11 +45,11 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 #define PACKET_MAGIC       0x43534921U
-#define PACKET_VERSION     1
+#define PACKET_VERSION     2
 #define MAX_SUBCARRIERS    128
 #define MAX_ANTENNAS       4
 #define CSI_QUEUE_LEN      32
-#define HEADER_SIZE        44
+#define HEADER_SIZE        60
 #define ACK_PAYLOAD        "grimnir-ack"
 #define ACK_PAYLOAD_LEN    11
 
@@ -244,7 +244,7 @@ static void enable_csi(void)
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint16_t version;
-    char     receiver_name[16];
+    char     receiver_name[RECEIVER_NAME_MAX_LEN];
     uint8_t  tx_mac[6];
     int16_t  rssi;
     int16_t  noise_floor;
@@ -256,6 +256,10 @@ typedef struct __attribute__((packed)) {
 } csi_packet_header_t;
 
 _Static_assert(sizeof(csi_packet_header_t) == HEADER_SIZE, "Header size mismatch");
+_Static_assert(
+    sizeof(RECEIVER_NAME) <= RECEIVER_NAME_MAX_LEN + 1,
+    "RECEIVER_NAME is longer than the on-wire header field"
+);
 
 static void udp_send_task(void *pv)
 {
