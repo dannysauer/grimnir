@@ -31,6 +31,11 @@ Edit `firmware/config.h` with your values:
 // If CSI is still flowing but Geri ACKs stop for too long, the receiver reboots.
 //#define RECEIVER_WATCHDOG_ACK_TIMEOUT_S  60
 //#define RECEIVER_WATCHDOG_CSI_GRACE_S    15
+
+// Optional syslog discovery domain. Muninn looks up the standard SRV name
+// `_syslog._udp.<domain>` through DHCP-provided DNS and ships logs there over
+// plain UDP syslog. If omitted, Muninn derives the domain from AGGREGATOR_HOST.
+//#define SYSLOG_DISCOVERY_DOMAIN "home.example.com"
 ```
 
 The transmitter (Huginn) does not use `AGGREGATOR_HOST` or `RECEIVER_NAME` — those
@@ -99,6 +104,7 @@ On first boot, watch the monitor output to confirm:
 - DNS resolves `AGGREGATOR_HOST`
 - Muninn shows "CSI capture enabled" and starts streaming
 - Muninn logs `Aggregator ACKs flowing` once Geri is acknowledging packets
+- If `_syslog._udp.<domain>` exists, Muninn logs `Remote syslog capture enabled`
 
 ### 5. Produce a standalone flash binary (optional)
 
@@ -217,6 +223,23 @@ DB setup is required.
 ---
 
 ## Verifying operation
+
+## Optional BIND-based syslog discovery
+
+Muninn can export logs to a plain UDP syslog collector discovered through a
+standard SRV record in your normal DNS zone. By default it derives the lookup
+domain from the DNS suffix of `AGGREGATOR_HOST`, or you can set
+`SYSLOG_DISCOVERY_DOMAIN` explicitly.
+
+Publish records like:
+
+```dns
+_syslog._udp.home.example.com.         300 IN SRV 0 0 514 logs.home.example.com.
+logs.home.example.com.                 300 IN A   192.168.0.10
+```
+
+With that in place, Muninn will query `_syslog._udp.home.example.com`, resolve
+the SRV target, and forward the same serial log stream to that syslog endpoint.
 
 With `idf.py monitor` running on a Muninn board, you should see:
 

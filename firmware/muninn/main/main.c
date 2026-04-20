@@ -41,6 +41,7 @@
 #include "nvs_flash.h"
 
 #include "../../config.h"
+#include "syslog_client.h"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 #define PACKET_MAGIC       0x43534921U
@@ -369,6 +370,7 @@ void app_main(void)
     s_csi_queue = xQueueCreate(CSI_QUEUE_LEN, sizeof(csi_entry_t));
 
     wifi_init_sta();
+    (void)syslog_client_init(RECEIVER_NAME);
     init_udp_socket();
     enable_csi();
 

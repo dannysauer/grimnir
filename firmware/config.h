@@ -46,6 +46,14 @@
 #  define RECEIVER_NAME       "rx_ground"   // e.g. "grimnir-rx-library", "grimnir-rx-kitchen"
 #endif
 
+// Optional remote syslog discovery domain. Muninn looks up the standard SRV
+// name `_syslog._udp.<domain>` through the DHCP-provided DNS resolvers and
+// streams logs there over plain UDP syslog. Leave this empty to derive the
+// domain from the DNS suffix of AGGREGATOR_HOST.
+#ifndef SYSLOG_DISCOVERY_DOMAIN
+#  define SYSLOG_DISCOVERY_DOMAIN ""
+#endif
+
 // Ack-based recovery watchdog. Muninn expects periodic lightweight UDP ACKs
 // from Geri while CSI is actively flowing; if CSI is still being captured but
 // ACKs stop for too long, the receiver reboots itself.
