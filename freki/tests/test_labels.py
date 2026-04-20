@@ -42,7 +42,13 @@ async def test_create_label_rolls_back_when_room_is_unknown() -> None:
 
 @pytest.mark.asyncio
 async def test_create_label_succeeds_when_training_samples_sync_lacks_permission() -> None:
-    session = FakeSession(
+    class RefreshedLabelSession(FakeSession):
+        async def refresh(self, obj: object) -> None:
+            await super().refresh(obj)
+            obj.id = 123
+            obj.created_at = datetime(2026, 4, 19, 19, 16, 13, 400000, tzinfo=UTC)
+
+    session = RefreshedLabelSession(
         execute_results=[
             FakeExecuteResult(),
             ProgrammingError(
@@ -61,6 +67,7 @@ async def test_create_label_succeeds_when_training_samples_sync_lacks_permission
 
     label = await labels.create_label(body, session)
 
+    assert isinstance(label, labels.LabelOut)
     assert label.room == "kitchen"
     assert session.commits == 1
     assert session.refreshes == 1

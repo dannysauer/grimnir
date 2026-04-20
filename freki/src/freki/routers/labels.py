@@ -166,8 +166,9 @@ async def create_label(body: LabelCreate, session: SessionDep):
     )
     await session.commit()
     await session.refresh(label)
+    response = LabelOut.model_validate(label)
     await _sync_training_samples_best_effort(session, body.time_start, body.time_end)
-    return label
+    return response
 
 
 @router.delete("/{label_id}", status_code=204)
