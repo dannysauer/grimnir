@@ -21,6 +21,10 @@
 // Examples: grimnir-rx-office, grimnir-rx-upstairs, grimnir-tx-living
 //#define RECEIVER_NAME       "grimnir-rx-office"
 
+// Optional receiver watchdog overrides.
+//#define RECEIVER_WATCHDOG_ACK_TIMEOUT_S  90
+//#define RECEIVER_WATCHDOG_CSI_GRACE_S    20
+
 // ── Huginn transmitter MAC ────────────────────────────────────────────────────
 // CSI frames from all other 802.11 senders are discarded.
 // Read the MAC from idf.py monitor output: "wifi:mode : sta (xx:xx:xx:xx:xx:xx)"

@@ -23,6 +23,7 @@
 // =============================================================================
 
 #include <errno.h>
+#include <stdbool.h>
 #include <math.h>
 #include <string.h>
 
@@ -48,6 +49,8 @@
 #define MAX_ANTENNAS       4
 #define CSI_QUEUE_LEN      32
 #define HEADER_SIZE        44
+#define ACK_PAYLOAD        "grimnir-ack"
+#define ACK_PAYLOAD_LEN    11
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
@@ -72,6 +75,9 @@ static QueueHandle_t      s_csi_queue;
 static int                s_sock = -1;
 static struct sockaddr_in s_agg_addr;
 static int                s_retry_count = 0;
+static volatile int64_t   s_last_csi_us = 0;
+static volatile int64_t   s_last_ack_us = 0;
+static volatile bool      s_ack_watchdog_armed = false;
 
 // ── Wi-Fi ─────────────────────────────────────────────────────────────────────
 
@@ -81,6 +87,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        s_ack_watchdog_armed = false;
+        s_last_ack_us = 0;
         if (s_retry_count < WIFI_MAX_RETRY) {
             esp_wifi_connect();
             ESP_LOGW(LOG_TAG_WIFI, "Retry %d/%d", ++s_retry_count, WIFI_MAX_RETRY);
@@ -91,6 +100,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         s_retry_count = 0;
         ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
         ESP_LOGI(LOG_TAG_WIFI, "Got IP: " IPSTR, IP2STR(&ev->ip_info.ip));
+        xEventGroupClearBits(s_wifi_event_group, WIFI_FAIL_BIT);
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -174,6 +184,7 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info)
     // Only process CSI from the Huginn transmitter — drop all ambient traffic.
     static const uint8_t huginn_mac[6] = HUGINN_MAC;
     if (memcmp(info->mac, huginn_mac, 6) != 0) return;
+    s_last_csi_us = esp_timer_get_time();
 
     csi_entry_t entry = {0};
 
@@ -287,6 +298,61 @@ static void udp_send_task(void *pv)
     }
 }
 
+static void udp_ack_task(void *pv)
+{
+    uint8_t buf[64];
+
+    while (1) {
+        int received = recvfrom(s_sock, buf, sizeof(buf), 0, NULL, NULL);
+        if (received < 0) {
+            if (errno == EINTR) continue;
+            ESP_LOGW(LOG_TAG_UDP, "recvfrom failed: %d", errno);
+            vTaskDelay(pdMS_TO_TICKS(250));
+            continue;
+        }
+
+        if (received == ACK_PAYLOAD_LEN && memcmp(buf, ACK_PAYLOAD, ACK_PAYLOAD_LEN) == 0) {
+            bool first_ack = !s_ack_watchdog_armed;
+            s_last_ack_us = esp_timer_get_time();
+            s_ack_watchdog_armed = true;
+            if (first_ack) {
+                ESP_LOGI(LOG_TAG_UDP, "Aggregator ACKs flowing");
+            }
+        }
+    }
+}
+
+static void receiver_watchdog_task(void *pv)
+{
+    const int64_t ack_timeout_us =
+        (int64_t)RECEIVER_WATCHDOG_ACK_TIMEOUT_S * 1000000LL;
+    const int64_t csi_grace_us =
+        (int64_t)RECEIVER_WATCHDOG_CSI_GRACE_S * 1000000LL;
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(RECEIVER_WATCHDOG_POLL_MS));
+
+        if (!s_ack_watchdog_armed) continue;
+        if ((xEventGroupGetBits(s_wifi_event_group) & WIFI_CONNECTED_BIT) == 0) continue;
+
+        int64_t now_us = esp_timer_get_time();
+        if (s_last_csi_us == 0 || now_us - s_last_csi_us > csi_grace_us) {
+            continue;
+        }
+        if (s_last_ack_us != 0 && now_us - s_last_ack_us <= ack_timeout_us) {
+            continue;
+        }
+
+        ESP_LOGE(
+            LOG_TAG_UDP,
+            "No aggregator ACK for %lld ms while CSI is still active — rebooting",
+            (long long)((now_us - s_last_ack_us) / 1000LL)
+        );
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_restart();
+    }
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 void app_main(void)
@@ -307,6 +373,8 @@ void app_main(void)
     enable_csi();
 
     xTaskCreate(udp_send_task, "udp_send", 8192, NULL, 10, NULL);
+    xTaskCreate(udp_ack_task, "udp_ack", 4096, NULL, 9, NULL);
+    xTaskCreate(receiver_watchdog_task, "rx_watchdog", 4096, NULL, 8, NULL);
 
     ESP_LOGI(LOG_TAG_CSI, "Streaming CSI → %s:%d", AGGREGATOR_HOST, AGGREGATOR_PORT);
 }

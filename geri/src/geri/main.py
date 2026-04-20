@@ -43,6 +43,8 @@ BATCH_TIMEOUT_MS = int(os.environ.get("BATCH_TIMEOUT_MS", "500"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
 # Set to 0 to disable the Prometheus HTTP server
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "8001"))
+ACK_INTERVAL_S = float(os.environ.get("ACK_INTERVAL_S", "5"))
+ACK_PAYLOAD = b"grimnir-ack"
 
 _log_level_int = getattr(logging, LOG_LEVEL, logging.INFO)
 _shared_processors = [
@@ -81,9 +83,23 @@ class CSIUDPProtocol(asyncio.DatagramProtocol):
     def __init__(self, queue: asyncio.Queue) -> None:
         self._queue = queue
         self._dropped = 0
+        self._last_ack_sent: dict[tuple[str, int], float] = {}
+        self._transport: asyncio.DatagramTransport | None = None
 
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
+        self._transport = transport
         log.info("udp.listening", host=UDP_HOST, port=UDP_PORT)
+
+    def _maybe_send_ack(self, addr: tuple[str, int]) -> None:
+        if self._transport is None:
+            return
+
+        now = asyncio.get_running_loop().time()
+        if now - self._last_ack_sent.get(addr, 0.0) < ACK_INTERVAL_S:
+            return
+
+        self._transport.sendto(ACK_PAYLOAD, addr)
+        self._last_ack_sent[addr] = now
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         try:
@@ -93,6 +109,7 @@ class CSIUDPProtocol(asyncio.DatagramProtocol):
             packets_invalid.inc()
             return
 
+        self._maybe_send_ack(addr)
         packets_received.labels(receiver_name=pkt.receiver_name).inc()
         wall_time = datetime.now(tz=UTC)
         try:

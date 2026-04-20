@@ -26,6 +26,11 @@ Edit `firmware/config.h` with your values:
 // Unique name for this board — visible in the dashboard and stored in the DB.
 // Change for each Muninn you flash: "rx_ground", "rx_upstairs", etc.
 #define RECEIVER_NAME       "rx_ground"
+
+// Optional Muninn watchdog overrides. Defaults are usually fine.
+// If CSI is still flowing but Geri ACKs stop for too long, the receiver reboots.
+//#define RECEIVER_WATCHDOG_ACK_TIMEOUT_S  60
+//#define RECEIVER_WATCHDOG_CSI_GRACE_S    15
 ```
 
 The transmitter (Huginn) does not use `AGGREGATOR_HOST` or `RECEIVER_NAME` — those
@@ -93,6 +98,7 @@ On first boot, watch the monitor output to confirm:
 - Wi-Fi connects
 - DNS resolves `AGGREGATOR_HOST`
 - Muninn shows "CSI capture enabled" and starts streaming
+- Muninn logs `Aggregator ACKs flowing` once Geri is acknowledging packets
 
 ### 5. Produce a standalone flash binary (optional)
 
@@ -218,6 +224,7 @@ With `idf.py monitor` running on a Muninn board, you should see:
 I (1234) CSI_WIFI: Connected: SSID=YourNet ch=6
 I (1456) CSI_UDP: Aggregator: csi-aggregator.home.example.com → 192.168.1.50:5005
 I (1678) CSI_DATA: CSI capture enabled
+I (1810) CSI_UDP: Aggregator ACKs flowing
 I (1900) CSI_DATA: Streaming CSI → csi-aggregator.home.example.com:5005
 ```
 

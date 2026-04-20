@@ -46,6 +46,19 @@
 #  define RECEIVER_NAME       "rx_ground"   // e.g. "grimnir-rx-library", "grimnir-rx-kitchen"
 #endif
 
+// Ack-based recovery watchdog. Muninn expects periodic lightweight UDP ACKs
+// from Geri while CSI is actively flowing; if CSI is still being captured but
+// ACKs stop for too long, the receiver reboots itself.
+#ifndef RECEIVER_WATCHDOG_ACK_TIMEOUT_S
+#  define RECEIVER_WATCHDOG_ACK_TIMEOUT_S 60
+#endif
+#ifndef RECEIVER_WATCHDOG_CSI_GRACE_S
+#  define RECEIVER_WATCHDOG_CSI_GRACE_S 15
+#endif
+#ifndef RECEIVER_WATCHDOG_POLL_MS
+#  define RECEIVER_WATCHDOG_POLL_MS 5000
+#endif
+
 // MAC address of the Huginn transmitter board.
 // Muninn will only process CSI from frames sent by this MAC, ignoring all
 // other ambient 802.11 traffic. Set this in config.local.h.
