@@ -48,7 +48,7 @@ database:
 modelUploadAuth:
   sharedSecret: ""
   existingSecret: ""
-  secretKey: MODEL_UPLOAD_SHARED_SECRET
+  secretKey: MODEL_UPLOAD_SHARED_SECRET  # pragma: allowlist secret
 
 # -- Optional shared secret for Nornir's daemon/job control writes.
 # When configured, Freki requires X-Grimnir-ML-Control-Secret on daemon
@@ -58,7 +58,7 @@ modelUploadAuth:
 mlControlAuth:
   sharedSecret: ""
   existingSecret: ""
-  secretKey: ML_CONTROL_SHARED_SECRET
+  secretKey: ML_CONTROL_SHARED_SECRET  # pragma: allowlist secret
 
 # ── Geri (UDP aggregator) ───────────────────────────────────────────────────
 
@@ -85,6 +85,9 @@ geri:
   service:
     type: LoadBalancer
     port: 5005
+    # Preserve the real receiver source IP so heartbeats show the device's LAN
+    # address instead of a cluster-internal SNAT address.
+    externalTrafficPolicy: Local
 
     # Annotations passed verbatim to the Service.
     # MetalLB pool selection + external-dns hostname (no static IP needed):

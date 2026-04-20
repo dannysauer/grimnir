@@ -11,6 +11,9 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.geri.service.type }}
+  {{- with .Values.geri.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
   selector:
     {{- include "grimnir.selectorLabels" (merge (dict "component" "geri") .) | nindent 4 }}
   ports:
