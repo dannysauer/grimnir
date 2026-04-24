@@ -374,7 +374,7 @@ void app_main(void)
     s_csi_queue = xQueueCreate(CSI_QUEUE_LEN, sizeof(csi_entry_t));
 
     wifi_init_sta();
-    (void)syslog_client_init(RECEIVER_NAME);
+    syslog_client_start(RECEIVER_NAME);
     init_udp_socket();
     enable_csi();
 

@@ -36,6 +36,7 @@
 #define SYSLOG_PACKET_MAX       384
 #define SYSLOG_APP_NAME         "muninn"
 #define SYSLOG_FACILITY_USER    1
+#define SYSLOG_INIT_STACK_SIZE  6144
 
 typedef struct {
     char line[SYSLOG_LINE_MAX];
@@ -546,7 +547,7 @@ static int syslog_vprintf(const char *format, va_list args)
     return written;
 }
 
-bool syslog_client_init(const char *receiver_name)
+static bool syslog_client_init(void)
 {
     char service_name[DNS_MAX_NAME_LEN] = {0};
     if (!resolve_syslog_endpoint(&s_syslog_addr, service_name, sizeof(service_name))) {
@@ -567,9 +568,20 @@ bool syslog_client_init(const char *receiver_name)
         return false;
     }
 
-    snprintf(s_receiver_name, sizeof(s_receiver_name), "%s", receiver_name);
     xTaskCreate(syslog_send_task, "syslog_send", 4096, NULL, 7, NULL);
     s_orig_vprintf = esp_log_set_vprintf(syslog_vprintf);
     ESP_LOGI(LOG_TAG_SYSLOG, "Remote syslog capture enabled");
     return true;
+}
+
+static void syslog_init_task(void *pv)
+{
+    (void)syslog_client_init();
+    vTaskDelete(NULL);
+}
+
+void syslog_client_start(const char *receiver_name)
+{
+    snprintf(s_receiver_name, sizeof(s_receiver_name), "%s", receiver_name);
+    xTaskCreate(syslog_init_task, "syslog_init", SYSLOG_INIT_STACK_SIZE, NULL, 6, NULL);
 }

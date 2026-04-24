@@ -2,4 +2,4 @@
 
 #include <stdbool.h>
 
-bool syslog_client_init(const char *receiver_name);
+void syslog_client_start(const char *receiver_name);
