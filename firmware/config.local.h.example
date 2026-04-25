@@ -12,6 +12,7 @@
 // ── Wi-Fi ────────────────────────────────────────────────────────────────────
 //#define WIFI_SSID           "YourNetworkSSID"
 //#define WIFI_PASSWORD       "YourNetworkPassword"
+//#define CSI_WIFI_CHANNEL    11
 
 // ── Aggregator ───────────────────────────────────────────────────────────────
 //#define AGGREGATOR_HOST     "grimnir-udp.home.example.com"

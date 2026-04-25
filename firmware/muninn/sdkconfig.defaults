@@ -4,3 +4,7 @@
 
 # CSI capture is the core function of this firmware — must be enabled.
 CONFIG_ESP_WIFI_CSI_ENABLED=y
+
+# Wi-Fi scanning, DNS, and startup logging have outgrown ESP-IDF's small
+# default app_main stack.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

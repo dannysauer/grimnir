@@ -25,8 +25,12 @@
 
 // ── CSI Channel ──────────────────────────────────────────────────────────────
 // Use a dedicated, low-interference channel. Non-overlapping 2.4GHz: 1, 6, 11
-#define CSI_WIFI_CHANNEL    6
-#define CSI_BANDWIDTH       WIFI_BW_HT40   // HT40 = more subcarriers
+#ifndef CSI_WIFI_CHANNEL
+#  define CSI_WIFI_CHANNEL    6
+#endif
+#ifndef CSI_BANDWIDTH
+#  define CSI_BANDWIDTH       WIFI_BW_HT40   // HT40 = more subcarriers
+#endif
 
 // ── Transmitter ──────────────────────────────────────────────────────────────
 #define TX_BEACON_INTERVAL_MS   100     // 10 Hz

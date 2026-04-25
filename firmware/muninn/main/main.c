@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_event.h"
@@ -52,6 +53,7 @@
 #define HEADER_SIZE        60
 #define ACK_PAYLOAD        "grimnir-ack"
 #define ACK_PAYLOAD_LEN    11
+#define WIFI_SCAN_MAX_APS  16
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
@@ -76,6 +78,7 @@ static QueueHandle_t      s_csi_queue;
 static int                s_sock = -1;
 static struct sockaddr_in s_agg_addr;
 static int                s_retry_count = 0;
+static volatile int64_t   s_last_raw_csi_us = 0;
 static volatile int64_t   s_last_csi_us = 0;
 static volatile int64_t   s_first_unacked_csi_us = 0;
 static volatile int64_t   s_last_ack_us = 0;
@@ -83,6 +86,12 @@ static volatile bool      s_ack_watchdog_armed = false;
 static volatile int       s_last_send_errno = 0;
 static volatile uint32_t  s_send_success_count = 0;
 static volatile uint32_t  s_send_error_count = 0;
+static volatile uint32_t  s_raw_csi_count = 0;
+static volatile uint32_t  s_huginn_csi_count = 0;
+static volatile uint32_t  s_unmatched_csi_count = 0;
+static uint8_t            s_last_unmatched_mac[6] = {0};
+static volatile uint16_t  s_last_unmatched_channel = 0;
+static volatile int8_t    s_last_unmatched_rssi = 0;
 static volatile bool      s_transport_reset_in_progress = false;
 
 static void clear_ack_watchdog_state(void)
@@ -92,16 +101,32 @@ static void clear_ack_watchdog_state(void)
     s_first_unacked_csi_us = 0;
 }
 
+static void format_mac(char *out, size_t out_len, const uint8_t mac[6])
+{
+    snprintf(
+        out,
+        out_len,
+        "%02x:%02x:%02x:%02x:%02x:%02x",
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5]
+    );
+}
+
 // ── Wi-Fi ─────────────────────────────────────────────────────────────────────
 
 static void wifi_event_handler(void *arg, esp_event_base_t base,
                                 int32_t id, void *data)
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
+        ESP_LOGI(LOG_TAG_WIFI, "Wi-Fi station started");
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         clear_ack_watchdog_state();
+        s_last_raw_csi_us = 0;
         s_last_csi_us = 0;
         if (s_retry_count < WIFI_MAX_RETRY) {
             esp_wifi_connect();
@@ -116,6 +141,67 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         xEventGroupClearBits(s_wifi_event_group, WIFI_FAIL_BIT);
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
+}
+
+static void pin_wifi_bssid_on_csi_channel(wifi_config_t *wifi_cfg)
+{
+    if (CSI_WIFI_CHANNEL == 0) {
+        return;
+    }
+
+    wifi_scan_config_t scan_cfg = {
+        .ssid = (uint8_t *)WIFI_SSID,
+        .channel = CSI_WIFI_CHANNEL,
+        .show_hidden = false,
+    };
+
+    ESP_LOGI(
+        LOG_TAG_WIFI,
+        "Scanning for SSID=%s on CSI channel %d",
+        WIFI_SSID,
+        CSI_WIFI_CHANNEL
+    );
+    esp_err_t scan_result = esp_wifi_scan_start(&scan_cfg, true);
+    if (scan_result != ESP_OK) {
+        ESP_LOGE(LOG_TAG_WIFI, "Wi-Fi scan failed: %s", esp_err_to_name(scan_result));
+        esp_restart();
+    }
+
+    wifi_ap_record_t records[WIFI_SCAN_MAX_APS] = {0};
+    uint16_t record_count = WIFI_SCAN_MAX_APS;
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&record_count, records));
+
+    if (record_count == 0) {
+        ESP_LOGE(
+            LOG_TAG_WIFI,
+            "No AP named %s found on CSI channel %d",
+            WIFI_SSID,
+            CSI_WIFI_CHANNEL
+        );
+        esp_restart();
+    }
+
+    wifi_ap_record_t *best = &records[0];
+    for (uint16_t i = 1; i < record_count; ++i) {
+        if (records[i].rssi > best->rssi) {
+            best = &records[i];
+        }
+    }
+
+    char bssid_str[18];
+    format_mac(bssid_str, sizeof(bssid_str), best->bssid);
+    ESP_LOGI(
+        LOG_TAG_WIFI,
+        "Selected AP bssid=%s primary_ch=%u rssi=%d",
+        bssid_str,
+        best->primary,
+        best->rssi
+    );
+
+    wifi_cfg->sta.channel = best->primary;
+    wifi_cfg->sta.bssid_set = true;
+    memcpy(wifi_cfg->sta.bssid, best->bssid, sizeof(wifi_cfg->sta.bssid));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, wifi_cfg));
 }
 
 static void wifi_init_sta(void)
@@ -147,13 +233,29 @@ static void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, CSI_BANDWIDTH));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_start());
+    pin_wifi_bssid_on_csi_channel(&wifi_cfg);
+    ESP_ERROR_CHECK(esp_wifi_connect());
 
     EventBits_t bits = xEventGroupWaitBits(
         s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
         pdFALSE, pdFALSE, portMAX_DELAY);
 
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(LOG_TAG_WIFI, "Connected: SSID=%s ch=%d", WIFI_SSID, CSI_WIFI_CHANNEL);
+        wifi_ap_record_t ap_info = {0};
+        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+            char bssid_str[18];
+            format_mac(bssid_str, sizeof(bssid_str), ap_info.bssid);
+            ESP_LOGI(
+                LOG_TAG_WIFI,
+                "Connected: SSID=%s bssid=%s primary_ch=%u rssi=%d",
+                WIFI_SSID,
+                bssid_str,
+                ap_info.primary,
+                ap_info.rssi
+            );
+        } else {
+            ESP_LOGI(LOG_TAG_WIFI, "Connected: SSID=%s", WIFI_SSID);
+        }
     } else {
         ESP_LOGE(LOG_TAG_WIFI, "Connection failed — rebooting");
         esp_restart();
@@ -239,12 +341,25 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info)
 {
     if (!info || !info->buf || info->len == 0) return;
 
+    s_last_raw_csi_us = esp_timer_get_time();
+    ++s_raw_csi_count;
+
     // Only process CSI from the Huginn transmitter — drop all ambient traffic.
     static const uint8_t huginn_mac[6] = HUGINN_MAC;
-    if (memcmp(info->mac, huginn_mac, 6) != 0) return;
+    if (memcmp(info->mac, huginn_mac, 6) != 0) {
+        ++s_unmatched_csi_count;
+        memcpy(s_last_unmatched_mac, info->mac, sizeof(s_last_unmatched_mac));
+        s_last_unmatched_channel = info->rx_ctrl.channel;
+        s_last_unmatched_rssi = info->rx_ctrl.rssi;
+        return;
+    }
+    ++s_huginn_csi_count;
+
     int64_t now_us = esp_timer_get_time();
     if (s_last_csi_us == 0) {
-        ESP_LOGI(LOG_TAG_CSI, "Huginn CSI detected");
+        char mac_str[18];
+        format_mac(mac_str, sizeof(mac_str), info->mac);
+        ESP_LOGI(LOG_TAG_CSI, "Huginn CSI detected from %s", mac_str);
     }
     s_last_csi_us = now_us;
     if (s_first_unacked_csi_us == 0) {
@@ -432,7 +547,18 @@ static void receiver_watchdog_task(void *pv)
         int64_t now_us = esp_timer_get_time();
         if (s_last_csi_us == 0) {
             if (now_us - last_idle_log_us >= idle_log_interval_us) {
-                ESP_LOGW(LOG_TAG_CSI, "No Huginn CSI seen since boot");
+                char mac_str[18];
+                format_mac(mac_str, sizeof(mac_str), s_last_unmatched_mac);
+                ESP_LOGW(
+                    LOG_TAG_CSI,
+                    "No Huginn CSI seen since boot "
+                    "(raw=%lu unmatched=%lu last_unmatched=%s ch=%u rssi=%d)",
+                    (unsigned long)s_raw_csi_count,
+                    (unsigned long)s_unmatched_csi_count,
+                    mac_str,
+                    s_last_unmatched_channel,
+                    s_last_unmatched_rssi
+                );
                 last_idle_log_us = now_us;
             }
             continue;
@@ -440,10 +566,19 @@ static void receiver_watchdog_task(void *pv)
 
         if (now_us - s_last_csi_us > csi_grace_us) {
             if (now_us - last_idle_log_us >= idle_log_interval_us) {
+                char mac_str[18];
+                format_mac(mac_str, sizeof(mac_str), s_last_unmatched_mac);
                 ESP_LOGW(
                     LOG_TAG_CSI,
-                    "No Huginn CSI seen for %lld ms",
-                    (long long)((now_us - s_last_csi_us) / 1000LL)
+                    "No Huginn CSI seen for %lld ms "
+                    "(raw=%lu matched=%lu unmatched=%lu last_unmatched=%s ch=%u rssi=%d)",
+                    (long long)((now_us - s_last_csi_us) / 1000LL),
+                    (unsigned long)s_raw_csi_count,
+                    (unsigned long)s_huginn_csi_count,
+                    (unsigned long)s_unmatched_csi_count,
+                    mac_str,
+                    s_last_unmatched_channel,
+                    s_last_unmatched_rssi
                 );
                 last_idle_log_us = now_us;
             }
