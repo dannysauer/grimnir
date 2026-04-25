@@ -75,6 +75,8 @@ typedef struct {
 // ── Globals ───────────────────────────────────────────────────────────────────
 static EventGroupHandle_t s_wifi_event_group;
 static QueueHandle_t      s_csi_queue;
+static QueueHandle_t      s_csi_free_queue;
+static csi_entry_t        s_csi_pool[CSI_QUEUE_LEN];
 static int                s_sock = -1;
 static struct sockaddr_in s_agg_addr;
 static int                s_retry_count = 0;
@@ -366,14 +368,18 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info)
         s_first_unacked_csi_us = now_us;
     }
 
-    csi_entry_t entry = {0};
+    csi_entry_t *entry = NULL;
+    if (xQueueReceive(s_csi_free_queue, &entry, 0) != pdTRUE || entry == NULL) {
+        return;
+    }
+    memset(entry, 0, sizeof(*entry));
 
-    memcpy(entry.tx_mac, info->mac, 6);
-    entry.rssi           = info->rx_ctrl.rssi;
-    entry.noise_floor    = info->rx_ctrl.noise_floor;
-    entry.channel        = info->rx_ctrl.channel;
-    entry.bandwidth_mhz  = (info->rx_ctrl.cwb == 1) ? 40 : 20;
-    entry.timestamp_us   = (uint32_t)(esp_timer_get_time() & 0xFFFFFFFF);
+    memcpy(entry->tx_mac, info->mac, 6);
+    entry->rssi           = info->rx_ctrl.rssi;
+    entry->noise_floor    = info->rx_ctrl.noise_floor;
+    entry->channel        = info->rx_ctrl.channel;
+    entry->bandwidth_mhz  = (info->rx_ctrl.cwb == 1) ? 40 : 20;
+    entry->timestamp_us   = (uint32_t)(esp_timer_get_time() & 0xFFFFFFFF);
 
     // CSI buf layout: alternating imaginary, real pairs (int8)
     // Total length = 2 * antenna_count * subcarrier_count
@@ -387,18 +393,20 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info)
     if (subcarriers > MAX_SUBCARRIERS) subcarriers = MAX_SUBCARRIERS;
     if (antennas > MAX_ANTENNAS) antennas = MAX_ANTENNAS;
 
-    entry.antenna_count    = antennas;
-    entry.subcarrier_count = subcarriers;
+    entry->antenna_count    = antennas;
+    entry->subcarrier_count = subcarriers;
 
     int total = antennas * subcarriers;
     for (int i = 0; i < total && i * 2 + 1 < info->len; i++) {
         int8_t imag = info->buf[i * 2];
         int8_t real = info->buf[i * 2 + 1];
-        entry.amplitude[i] = sqrtf((float)(real * real) + (float)(imag * imag));
-        entry.phase[i]     = atan2f((float)imag, (float)real);
+        entry->amplitude[i] = sqrtf((float)(real * real) + (float)(imag * imag));
+        entry->phase[i]     = atan2f((float)imag, (float)real);
     }
 
-    xQueueSend(s_csi_queue, &entry, 0);  // drop if queue full
+    if (xQueueSend(s_csi_queue, &entry, 0) != pdTRUE) {
+        xQueueSend(s_csi_free_queue, &entry, 0);
+    }
 }
 
 static void enable_csi(void)
@@ -442,18 +450,20 @@ _Static_assert(
 
 static void udp_send_task(void *pv)
 {
-    csi_entry_t entry;
+    csi_entry_t *entry = NULL;
     // Max packet: header + 2 float arrays
     static uint8_t pkt_buf[HEADER_SIZE + MAX_ANTENNAS * MAX_SUBCARRIERS * 4 * 2];
 
     while (1) {
         if (xQueueReceive(s_csi_queue, &entry, portMAX_DELAY) != pdTRUE) continue;
+        if (entry == NULL) continue;
         if (s_sock < 0) {
+            xQueueSend(s_csi_free_queue, &entry, portMAX_DELAY);
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
 
-        int n_values = entry.antenna_count * entry.subcarrier_count;
+        int n_values = entry->antenna_count * entry->subcarrier_count;
         int pkt_len  = HEADER_SIZE + n_values * 4 * 2;
 
         csi_packet_header_t *hdr = (csi_packet_header_t *)pkt_buf;
@@ -461,19 +471,19 @@ static void udp_send_task(void *pv)
         hdr->version         = PACKET_VERSION;
         memset(hdr->receiver_name, 0, sizeof(hdr->receiver_name));
         strncpy(hdr->receiver_name, RECEIVER_NAME, sizeof(hdr->receiver_name) - 1);
-        memcpy(hdr->tx_mac, entry.tx_mac, 6);
-        hdr->rssi            = (int16_t)entry.rssi;
-        hdr->noise_floor     = (int16_t)entry.noise_floor;
-        hdr->channel         = entry.channel;
-        hdr->bandwidth_mhz   = entry.bandwidth_mhz;
-        hdr->antenna_count   = entry.antenna_count;
-        hdr->subcarrier_count = entry.subcarrier_count;
-        hdr->timestamp_us    = entry.timestamp_us;
+        memcpy(hdr->tx_mac, entry->tx_mac, 6);
+        hdr->rssi            = (int16_t)entry->rssi;
+        hdr->noise_floor     = (int16_t)entry->noise_floor;
+        hdr->channel         = entry->channel;
+        hdr->bandwidth_mhz   = entry->bandwidth_mhz;
+        hdr->antenna_count   = entry->antenna_count;
+        hdr->subcarrier_count = entry->subcarrier_count;
+        hdr->timestamp_us    = entry->timestamp_us;
 
         float *amp_out   = (float *)(pkt_buf + HEADER_SIZE);
         float *phase_out = (float *)(pkt_buf + HEADER_SIZE + n_values * 4);
-        memcpy(amp_out,   entry.amplitude, n_values * 4);
-        memcpy(phase_out, entry.phase,     n_values * 4);
+        memcpy(amp_out,   entry->amplitude, n_values * 4);
+        memcpy(phase_out, entry->phase,     n_values * 4);
 
         int sock = s_sock;
         int sent = sendto(sock, pkt_buf, pkt_len, 0,
@@ -492,8 +502,9 @@ static void udp_send_task(void *pv)
         } else {
             ++s_send_success_count;
             ESP_LOGD(LOG_TAG_UDP, "Sent %d bytes (%d subcarriers × %d ant)",
-                     sent, entry.subcarrier_count, entry.antenna_count);
+                     sent, entry->subcarrier_count, entry->antenna_count);
         }
+        xQueueSend(s_csi_free_queue, &entry, portMAX_DELAY);
     }
 }
 
@@ -635,7 +646,16 @@ void app_main(void)
 
     ESP_LOGI(LOG_TAG_WIFI, "=== CSI Receiver: %s ===", RECEIVER_NAME);
 
-    s_csi_queue = xQueueCreate(CSI_QUEUE_LEN, sizeof(csi_entry_t));
+    s_csi_queue = xQueueCreate(CSI_QUEUE_LEN, sizeof(csi_entry_t *));
+    s_csi_free_queue = xQueueCreate(CSI_QUEUE_LEN, sizeof(csi_entry_t *));
+    if (s_csi_queue == NULL || s_csi_free_queue == NULL) {
+        ESP_LOGE(LOG_TAG_CSI, "Failed to create CSI queues");
+        esp_restart();
+    }
+    for (size_t i = 0; i < CSI_QUEUE_LEN; ++i) {
+        csi_entry_t *entry = &s_csi_pool[i];
+        xQueueSend(s_csi_free_queue, &entry, 0);
+    }
 
     wifi_init_sta();
     syslog_client_start(RECEIVER_NAME);
