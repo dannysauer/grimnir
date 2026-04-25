@@ -77,8 +77,20 @@ static int                s_sock = -1;
 static struct sockaddr_in s_agg_addr;
 static int                s_retry_count = 0;
 static volatile int64_t   s_last_csi_us = 0;
+static volatile int64_t   s_first_unacked_csi_us = 0;
 static volatile int64_t   s_last_ack_us = 0;
 static volatile bool      s_ack_watchdog_armed = false;
+static volatile int       s_last_send_errno = 0;
+static volatile uint32_t  s_send_success_count = 0;
+static volatile uint32_t  s_send_error_count = 0;
+static volatile bool      s_transport_reset_in_progress = false;
+
+static void clear_ack_watchdog_state(void)
+{
+    s_ack_watchdog_armed = false;
+    s_last_ack_us = 0;
+    s_first_unacked_csi_us = 0;
+}
 
 // ── Wi-Fi ─────────────────────────────────────────────────────────────────────
 
@@ -89,8 +101,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-        s_ack_watchdog_armed = false;
-        s_last_ack_us = 0;
+        clear_ack_watchdog_state();
+        s_last_csi_us = 0;
         if (s_retry_count < WIFI_MAX_RETRY) {
             esp_wifi_connect();
             ESP_LOGW(LOG_TAG_WIFI, "Retry %d/%d", ++s_retry_count, WIFI_MAX_RETRY);
@@ -158,6 +170,16 @@ static void init_udp_socket(void)
         esp_restart();
     }
 
+    struct sockaddr_in local_addr = {
+        .sin_family = AF_INET,
+        .sin_port = htons(0),
+        .sin_addr.s_addr = htonl(INADDR_ANY),
+    };
+    if (bind(s_sock, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
+        ESP_LOGE(LOG_TAG_UDP, "bind() failed: %d (%s)", errno, strerror(errno));
+        esp_restart();
+    }
+
     // Resolve aggregator hostname via DNS
     struct addrinfo hints = { .ai_family = AF_INET, .ai_socktype = SOCK_DGRAM };
     struct addrinfo *res  = NULL;
@@ -173,7 +195,42 @@ static void init_udp_socket(void)
 
     char ip_str[16];
     inet_ntoa_r(s_agg_addr.sin_addr, ip_str, sizeof(ip_str));
-    ESP_LOGI(LOG_TAG_UDP, "Aggregator: %s → %s:%d", AGGREGATOR_HOST, ip_str, AGGREGATOR_PORT);
+    struct sockaddr_in bound_addr = {0};
+    socklen_t bound_len = sizeof(bound_addr);
+    if (getsockname(s_sock, (struct sockaddr *)&bound_addr, &bound_len) == 0) {
+        ESP_LOGI(
+            LOG_TAG_UDP,
+            "Aggregator: %s → %s:%d (local UDP %u)",
+            AGGREGATOR_HOST,
+            ip_str,
+            AGGREGATOR_PORT,
+            ntohs(bound_addr.sin_port)
+        );
+    } else {
+        ESP_LOGI(LOG_TAG_UDP, "Aggregator: %s → %s:%d", AGGREGATOR_HOST, ip_str, AGGREGATOR_PORT);
+    }
+}
+
+static void reset_udp_transport(const char *reason)
+{
+    if (s_transport_reset_in_progress) {
+        return;
+    }
+
+    s_transport_reset_in_progress = true;
+    ESP_LOGW(LOG_TAG_UDP, "Resetting UDP transport: %s", reason);
+
+    clear_ack_watchdog_state();
+    s_last_send_errno = 0;
+
+    int old_sock = s_sock;
+    s_sock = -1;
+    if (old_sock >= 0) {
+        close(old_sock);
+    }
+
+    init_udp_socket();
+    s_transport_reset_in_progress = false;
 }
 
 // ── CSI callback (runs in Wi-Fi task context — must be fast) ──────────────────
@@ -185,7 +242,14 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info)
     // Only process CSI from the Huginn transmitter — drop all ambient traffic.
     static const uint8_t huginn_mac[6] = HUGINN_MAC;
     if (memcmp(info->mac, huginn_mac, 6) != 0) return;
-    s_last_csi_us = esp_timer_get_time();
+    int64_t now_us = esp_timer_get_time();
+    if (s_last_csi_us == 0) {
+        ESP_LOGI(LOG_TAG_CSI, "Huginn CSI detected");
+    }
+    s_last_csi_us = now_us;
+    if (s_first_unacked_csi_us == 0) {
+        s_first_unacked_csi_us = now_us;
+    }
 
     csi_entry_t entry = {0};
 
@@ -269,6 +333,10 @@ static void udp_send_task(void *pv)
 
     while (1) {
         if (xQueueReceive(s_csi_queue, &entry, portMAX_DELAY) != pdTRUE) continue;
+        if (s_sock < 0) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
 
         int n_values = entry.antenna_count * entry.subcarrier_count;
         int pkt_len  = HEADER_SIZE + n_values * 4 * 2;
@@ -292,11 +360,22 @@ static void udp_send_task(void *pv)
         memcpy(amp_out,   entry.amplitude, n_values * 4);
         memcpy(phase_out, entry.phase,     n_values * 4);
 
-        int sent = sendto(s_sock, pkt_buf, pkt_len, 0,
+        int sock = s_sock;
+        int sent = sendto(sock, pkt_buf, pkt_len, 0,
                           (struct sockaddr *)&s_agg_addr, sizeof(s_agg_addr));
         if (sent < 0) {
-            ESP_LOGW(LOG_TAG_UDP, "sendto failed: %d", errno);
+            int send_errno = errno;
+            s_last_send_errno = send_errno;
+            ++s_send_error_count;
+            ESP_LOGW(LOG_TAG_UDP, "sendto failed: %d (%s)", send_errno, strerror(send_errno));
+
+            if (sock == s_sock && send_errno != EINTR) {
+                reset_udp_transport("send error");
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(100));
         } else {
+            ++s_send_success_count;
             ESP_LOGD(LOG_TAG_UDP, "Sent %d bytes (%d subcarriers × %d ant)",
                      sent, entry.subcarrier_count, entry.antenna_count);
         }
@@ -308,10 +387,18 @@ static void udp_ack_task(void *pv)
     uint8_t buf[64];
 
     while (1) {
-        int received = recvfrom(s_sock, buf, sizeof(buf), 0, NULL, NULL);
+        int sock = s_sock;
+        if (sock < 0) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
+        int received = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
         if (received < 0) {
-            if (errno == EINTR) continue;
-            ESP_LOGW(LOG_TAG_UDP, "recvfrom failed: %d", errno);
+            int recv_errno = errno;
+            if (recv_errno == EINTR) continue;
+            if (sock != s_sock || recv_errno == EBADF) continue;
+            ESP_LOGW(LOG_TAG_UDP, "recvfrom failed: %d (%s)", recv_errno, strerror(recv_errno));
             vTaskDelay(pdMS_TO_TICKS(250));
             continue;
         }
@@ -320,6 +407,7 @@ static void udp_ack_task(void *pv)
             bool first_ack = !s_ack_watchdog_armed;
             s_last_ack_us = esp_timer_get_time();
             s_ack_watchdog_armed = true;
+            s_first_unacked_csi_us = 0;
             if (first_ack) {
                 ESP_LOGI(LOG_TAG_UDP, "Aggregator ACKs flowing");
             }
@@ -333,28 +421,69 @@ static void receiver_watchdog_task(void *pv)
         (int64_t)RECEIVER_WATCHDOG_ACK_TIMEOUT_S * 1000000LL;
     const int64_t csi_grace_us =
         (int64_t)RECEIVER_WATCHDOG_CSI_GRACE_S * 1000000LL;
+    const int64_t idle_log_interval_us = 30000000LL;
+    int64_t last_idle_log_us = 0;
 
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(RECEIVER_WATCHDOG_POLL_MS));
 
-        if (!s_ack_watchdog_armed) continue;
         if ((xEventGroupGetBits(s_wifi_event_group) & WIFI_CONNECTED_BIT) == 0) continue;
 
         int64_t now_us = esp_timer_get_time();
-        if (s_last_csi_us == 0 || now_us - s_last_csi_us > csi_grace_us) {
+        if (s_last_csi_us == 0) {
+            if (now_us - last_idle_log_us >= idle_log_interval_us) {
+                ESP_LOGW(LOG_TAG_CSI, "No Huginn CSI seen since boot");
+                last_idle_log_us = now_us;
+            }
             continue;
         }
+
+        if (now_us - s_last_csi_us > csi_grace_us) {
+            if (now_us - last_idle_log_us >= idle_log_interval_us) {
+                ESP_LOGW(
+                    LOG_TAG_CSI,
+                    "No Huginn CSI seen for %lld ms",
+                    (long long)((now_us - s_last_csi_us) / 1000LL)
+                );
+                last_idle_log_us = now_us;
+            }
+            clear_ack_watchdog_state();
+            continue;
+        }
+
+        if (!s_ack_watchdog_armed) {
+            if (
+                s_first_unacked_csi_us != 0 &&
+                now_us - s_first_unacked_csi_us > ack_timeout_us
+            ) {
+                ESP_LOGW(
+                    LOG_TAG_UDP,
+                    "CSI is active but aggregator ACKs never started after %lld ms "
+                    "(send_ok=%lu send_err=%lu last_errno=%d) — resetting transport",
+                    (long long)((now_us - s_first_unacked_csi_us) / 1000LL),
+                    (unsigned long)s_send_success_count,
+                    (unsigned long)s_send_error_count,
+                    s_last_send_errno
+                );
+                reset_udp_transport("ACKs never started");
+            }
+            continue;
+        }
+
         if (s_last_ack_us != 0 && now_us - s_last_ack_us <= ack_timeout_us) {
             continue;
         }
 
-        ESP_LOGE(
+        ESP_LOGW(
             LOG_TAG_UDP,
-            "No aggregator ACK for %lld ms while CSI is still active — rebooting",
-            (long long)((now_us - s_last_ack_us) / 1000LL)
+            "No aggregator ACK for %lld ms while CSI is still active "
+            "(send_ok=%lu send_err=%lu last_errno=%d) — resetting transport",
+            (long long)((now_us - s_last_ack_us) / 1000LL),
+            (unsigned long)s_send_success_count,
+            (unsigned long)s_send_error_count,
+            s_last_send_errno
         );
-        vTaskDelay(pdMS_TO_TICKS(100));
-        esp_restart();
+        reset_udp_transport("ACK timeout");
     }
 }
 
