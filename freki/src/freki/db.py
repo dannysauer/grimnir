@@ -19,7 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 async def _get_session() -> AsyncGenerator[AsyncSession, None]:
     factory = get_session_factory()
     async with factory() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            if session.in_transaction():
+                await session.rollback()
 
 
 SessionDep = Annotated[AsyncSession, Depends(_get_session)]

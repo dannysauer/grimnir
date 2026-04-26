@@ -11,8 +11,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from csi_models import CsiSample, Label
-from fastapi import APIRouter, HTTPException
+from csi_models import CsiSample, Label, get_session_factory
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -22,6 +22,9 @@ from ..training_samples_access import is_training_samples_permission_error
 
 router = APIRouter()
 log = structlog.get_logger(__name__)
+
+BACKFILL_LOCK_TIMEOUT = "2s"
+BACKFILL_STATEMENT_TIMEOUT = "15s"
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -66,6 +69,7 @@ async def _insert_training_samples_for_window(
     start: datetime,
     end: datetime,
 ) -> None:
+    await _set_backfill_timeouts(session)
     await session.execute(
         text("""
             INSERT INTO training_samples
@@ -78,6 +82,63 @@ async def _insert_training_samples_for_window(
         """),
         {"start": start, "end": end},
     )
+
+
+async def _set_backfill_timeouts(session: SessionDep) -> None:
+    await session.execute(text(f"SET LOCAL lock_timeout = '{BACKFILL_LOCK_TIMEOUT}'"))
+    await session.execute(text(f"SET LOCAL statement_timeout = '{BACKFILL_STATEMENT_TIMEOUT}'"))
+
+
+async def _backfill_csi_samples_best_effort(
+    session: SessionDep,
+    start: datetime,
+    end: datetime,
+    room: str,
+) -> bool:
+    try:
+        await _set_backfill_timeouts(session)
+        await session.execute(
+            update(CsiSample)
+            .where(
+                CsiSample.time >= start,
+                CsiSample.time < end,
+            )
+            .values(label=room)
+        )
+        await session.commit()
+        return True
+    except DBAPIError as exc:
+        await session.rollback()
+        log.warning(
+            "csi_samples.backfill_skipped",
+            reason="db_error",
+            error=str(exc.orig),
+            start=start.isoformat(),
+            end=end.isoformat(),
+            room=room,
+        )
+        return False
+
+
+async def _backfill_label_best_effort(
+    label_id: int,
+    start: datetime,
+    end: datetime,
+    room: str,
+) -> None:
+    factory = get_session_factory()
+    async with factory() as session:
+        backfilled = await _backfill_csi_samples_best_effort(session, start, end, room)
+        if not backfilled:
+            return
+        await _sync_training_samples_best_effort(session, start, end)
+        log.info(
+            "label.backfill_completed",
+            label_id=label_id,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            room=room,
+        )
 
 
 async def _sync_training_samples_best_effort(
@@ -106,6 +167,7 @@ async def _resync_training_samples_best_effort(
     end: datetime,
 ) -> None:
     try:
+        await _set_backfill_timeouts(session)
         await session.execute(
             text("DELETE FROM training_samples WHERE time >= :start AND time < :end"),
             {"start": start, "end": end},
@@ -137,7 +199,7 @@ async def list_labels(session: SessionDep, minutes: int = 120):
 
 
 @router.post("", response_model=LabelOut, status_code=201)
-async def create_label(body: LabelCreate, session: SessionDep):
+async def create_label(body: LabelCreate, background_tasks: BackgroundTasks, session: SessionDep):
     label = Label(
         time_start=body.time_start,
         time_end=body.time_end,
@@ -155,19 +217,16 @@ async def create_label(body: LabelCreate, session: SessionDep):
             detail=f"Room '{body.room}' does not exist — add it via manage rooms first",
         ) from None
 
-    # Backfill csi_samples.label for this time window
-    await session.execute(
-        update(CsiSample)
-        .where(
-            CsiSample.time >= body.time_start,
-            CsiSample.time < body.time_end,
-        )
-        .values(label=body.room)
-    )
     await session.commit()
     await session.refresh(label)
     response = LabelOut.model_validate(label)
-    await _sync_training_samples_best_effort(session, body.time_start, body.time_end)
+    background_tasks.add_task(
+        _backfill_label_best_effort,
+        label.id,
+        body.time_start,
+        body.time_end,
+        body.room,
+    )
     return response
 
 

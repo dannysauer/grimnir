@@ -791,7 +791,7 @@
               <label>NOTES (optional)</label>
               <textarea id="live-notes-active" placeholder="add notes before leaving…"></textarea>
             </div>
-            <button class="btn leave-btn" onclick="leaveRoom()">Leave Room</button>
+            <button class="btn leave-btn" id="live-leave-btn" onclick="leaveRoom()">Leave Room</button>
             <button class="btn secondary" onclick="cancelEntry()">Cancel (discard)</button>
           </div>
         </div>
@@ -1506,16 +1506,25 @@ function updateElapsed() {
 
 async function leaveRoom() {
   if (!liveRoom || !liveEnterTime) return;
+  const leaveBtn = document.getElementById('live-leave-btn');
+  if (leaveBtn?.disabled) return;
   const time_start = liveEnterTime.toISOString();
   const time_end   = new Date().toISOString();
   const occupants  = parseInt(document.getElementById('live-occupants').value, 10) || 1;
   const notes      = document.getElementById('live-notes-active').value.trim() || null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
+    if (leaveBtn) {
+      leaveBtn.disabled = true;
+      leaveBtn.textContent = 'Saving…';
+    }
     const res = await fetch(`${API}/api/labels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ room: liveRoom, time_start, time_end, occupants, notes }),
+      signal: controller.signal,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -1529,7 +1538,13 @@ async function leaveRoom() {
     loadLabels();
   } catch (e) {
     console.error('leaveRoom:', e);
-    toast(e.message ?? 'Network error', 'warn');
+    toast(e.name === 'AbortError' ? 'Timed out saving label' : (e.message ?? 'Network error'), 'warn');
+  } finally {
+    clearTimeout(timeoutId);
+    if (leaveBtn && liveRoom && liveEnterTime) {
+      leaveBtn.disabled = false;
+      leaveBtn.textContent = 'Leave Room';
+    }
   }
 }
 
@@ -1549,9 +1564,11 @@ function resetLiveState() {
   const notesActive = document.getElementById('live-notes-active');
   const occ         = document.getElementById('live-occupants');
   const enterBtn    = document.getElementById('live-enter-btn');
+  const leaveBtn    = document.getElementById('live-leave-btn');
   if (notesActive) notesActive.value = '';
   if (occ)         occ.value        = '1';
   if (enterBtn)    { enterBtn.disabled = true; enterBtn.textContent = 'Select a room above ↑'; }
+  if (leaveBtn)    { leaveBtn.disabled = false; leaveBtn.textContent = 'Leave Room'; }
   renderLiveRoomButtons();
 }
 
