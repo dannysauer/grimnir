@@ -93,7 +93,8 @@ grimnir/
 │           ├── training_jobs.py    # Training-job queue (create/claim/report)
 │           ├── training_data.py    # Cursor-paginated training-data export
 │           ├── models.py           # Trained-model upload/list/activate/download
-│           └── predictions.py      # PUT/GET /api/predictions/current (Völva cache)
+│           ├── rooms.py            # Room CRUD for labels and predictions
+│           └── predictions.py      # GET/PUT current predictions + SSE stream
 ├── nornir/                         # ML trainer daemon (claims jobs, fits sklearn)
 │   ├── pyproject.toml
 │   ├── Dockerfile
@@ -193,14 +194,16 @@ handled by Prometheus instead.
 When adding new capabilities, environment variables, dependencies, configuration
 options, API endpoints, or breaking changes, **always** update:
 
-1. **`CLAUDE.md`** — authoritative reference for Claude agents; update the
-   relevant sections (stack table, env vars, API table, etc.)
-2. **`TODO.md`** — check off completed items; add new follow-up items with
+1. **Reader-facing docs in `docs/`** — update the relevant API, deployment,
+   firmware, protocol, and monorepo pages first
+2. **`CLAUDE.md`** — keep agent context aligned with the reader-facing docs
+   and current source
+3. **`TODO.md`** — check off completed items; add new follow-up items with
    GitHub issue numbers where relevant
-3. **`README.md`** — if the change is user-visible (new quick-start step,
+4. **`README.md`** — if the change is user-visible (new quick-start step,
    new component, changed endpoint, etc.)
-4. **`pyproject.toml`** — add any new runtime dependencies with pinned versions
-5. **GitHub issues** — create or update the tracking issue / epic for the work,
+5. **`pyproject.toml`** — add any new runtime dependencies with pinned versions
+6. **GitHub issues** — create or update the tracking issue / epic for the work,
    and close completed issues after the changes land on `main`
 
 These updates are not optional — they ensure continuity across agent sessions.
@@ -354,27 +357,15 @@ create the schema automatically if the role has the required privileges.
 
 ## UDP Wire Protocol
 
-The binary packet format is defined in `firmware/muninn/main/main.c` and parsed
-in `geri/src/geri/parser.py`. They must stay in sync.
+The current Muninn packet format is version 2 with a 60-byte header and a
+32-byte receiver name. Geri still accepts version 1 for backward compatibility.
 
-```
-Offset  Size  Type        Field
-------  ----  ----------  -----
- 0       4    uint32      magic = 0x43534921 ("CSI!")
- 4       2    uint16      version = 1
- 6      16    char[16]    receiver_name (null-padded ASCII)
-22       6    uint8[6]    transmitter MAC bytes
-28       2    int16       rssi (dBm)
-30       2    int16       noise_floor (dBm)
-32       2    uint16      channel
-34       2    uint16      bandwidth_mhz
-36       2    uint16      antenna_count
-38       2    uint16      subcarrier_count
-40       4    uint32      timestamp_us (device uptime, wraps ~71 min)
-44       N    float32[]   amplitude  (N = antenna_count × subcarrier_count)
-44+N     N    float32[]   phase      (N = antenna_count × subcarrier_count)
-```
-All little-endian. Header is exactly 44 bytes (`_Static_assert` in firmware confirms this).
+Reader-facing contract: `docs/udp-wire-protocol.md`.
+
+Source of truth:
+- Current firmware layout: `firmware/muninn/main/main.c`
+- Parser constants and validation: `geri/src/geri/parser.py`
+- Regression tests: `geri/tests/test_parser.py`
 
 ## Startup Sequence (both aggregator and backend)
 
@@ -387,48 +378,51 @@ conversion automatically (`postgresql+asyncpg://` → `postgresql+psycopg2://`).
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/stream` | SSE — JSON snapshot every 1s, all receivers |
-| GET | `/api/csi-stream` | SSE — raw `csi_samples` rows since cursor (Völva subscribes here) |
-| GET | `/api/history/receivers` | All receivers with heartbeat |
-| GET | `/api/history/variance?receiver_id=&minutes=` | Per-minute RSSI variance (uses continuous aggregate, falls back to raw) |
-| GET | `/api/history/snapshot?receiver_id=&limit=` | Raw CSI samples for heatmap |
-| GET | `/api/labels?minutes=` | Recent labels |
-| POST | `/api/labels` | Create label + backfill `csi_samples.label` |
-| DELETE | `/api/labels/{id}` | Delete label + clear backfill |
-| GET | `/api/training-data?time_start=&time_end=&rooms=&cursor=` | Cursor-paginated NDJSON of labeled CSI rows (Nornir pulls via loop) |
-| POST | `/api/training-daemons/register` | Nornir registers on startup |
-| POST | `/api/training-daemons/{name}/heartbeat` | Nornir keep-alive |
-| GET/POST | `/api/training-jobs` | List + enqueue training jobs (validates rooms + non-empty window) |
-| POST | `/api/training-jobs/{id}/claim` | Race-free claim — returns 409 if lost |
-| POST | `/api/training-jobs/{id}/report` | Progress + status updates from trainer |
-| POST | `/api/training-jobs/{id}/cancel` | Mark job cancelled |
-| GET/POST | `/api/models` | List + upload trained models; upload can require `X-Grimnir-Model-Upload-Secret` |
-| GET | `/api/models/{id}/data` | Download serialized joblib blob |
-| GET | `/api/models/active` | Currently-active model metadata |
-| POST | `/api/models/{id}/activate` | Atomic activate via FOR UPDATE + CTE |
-| GET/PUT | `/api/predictions/current` | Völva publishes `{timestamp, model_id, rooms}`; HA polls |
-| GET | `/health` | Liveness check |
+Reader-facing contract: `docs/api-reference.md`.
+
+Freki also exposes FastAPI-generated docs at `/openapi.json`, `/docs`, and
+`/redoc` when the service is running.
+
+High-level surface:
+- Service: `GET /health`, `GET /metrics`
+- Streams/history: `GET /api/stream`, `GET /api/csi-stream`,
+  `GET /api/history/receivers`, `GET /api/history/variance`,
+  `GET /api/history/snapshot`
+- Rooms and labels: `GET/POST /api/rooms`, `PATCH/DELETE /api/rooms/{room}`,
+  `GET/POST /api/labels`, `DELETE /api/labels/{id}`
+- Training: `GET /api/training-data`, `GET /api/training-daemons`,
+  `POST /api/training-daemons/heartbeat`, `GET/POST /api/training-jobs`,
+  `POST /api/training-jobs/{id}/claim`, `heartbeat`, `complete`, `fail`, and
+  `cancel`
+- Models: `GET/POST /api/models`, `GET /api/models/active`,
+  `GET /api/models/{id}/data`, `POST /api/models/{id}/activate`
+- Predictions: `GET/PUT /api/predictions/current`,
+  `GET /api/predictions/stream`
 
 ## Docker Build Notes
 
-Build context for both Dockerfiles is the **repo root** (not the service subdirectory).
-This is because both services depend on the `mimir/` package which sits at the root.
+Build context for service Dockerfiles is the **repo root** (not the service
+subdirectory). This is because service packages depend on the `mimir/` package.
 
 ```dockerfile
-# In geri/Dockerfile and freki/Dockerfile:
+# In service Dockerfiles:
 COPY mimir/ /mimir
 RUN pip install --no-cache-dir /mimir
 ```
 
-In `bifrost/compose.yaml` the build context is `..` (repo root). When building manually:
+In `bifrost/compose.yaml` the build context is `..` (repo root). When building
+manually:
+
 ```bash
 docker build -f geri/Dockerfile -t grimnir/geri .
 docker build -f freki/Dockerfile -t grimnir/freki .
+docker build -f nornir/Dockerfile -t grimnir/nornir .
+docker build -f volva/Dockerfile -t grimnir/volva .
 ```
 
 ## Deployment
+
+Reader-facing deployment contract: `docs/deployment.md`.
 
 ### Standalone (Docker Compose)
 
@@ -471,10 +465,13 @@ See `docs/firmware-build-and-flash.md` for full Linux and Windows build instruct
   - **ESP-IDF CLI** (`idf.py build flash monitor`) — see Linux/Windows sections in the guide
   - **PlatformIO CLI** (`pio run -t upload`) — uses `firmware/{huginn,muninn}/platformio.ini`;
     must use `framework = espidf` (CSI APIs are not available in the Arduino framework)
-- Edit `firmware/config.h` before each flash:
+- Copy `firmware/config.local.h.example` to `firmware/config.local.h` before
+  flashing each board. `config.local.h` is gitignored and overrides
+  `firmware/config.h` defaults:
   - `WIFI_SSID` / `WIFI_PASSWORD`
   - `AGGREGATOR_HOST` — DNS name of aggregator (resolved via DHCP-provided DNS)
   - `RECEIVER_NAME` — unique per board (e.g. `"rx_ground"`, `"rx_upstairs"`)
+  - `HUGINN_MAC` — transmitter MAC accepted by Muninn
 - New receivers auto-register in the DB on first packet — no manual setup needed
 
 ## Observability
@@ -502,7 +499,6 @@ See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 - [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
 - [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth. Narrow mitigations: `POST /api/models` can be gated with `MODEL_UPLOAD_SHARED_SECRET` (#29), and Nornir's daemon/job ML control writes can be gated with `ML_CONTROL_SHARED_SECRET` (#27).
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
-- [ ] **SSE error handling** (#8) — add reconnect banner to Hlidskjalf
 
 ## ML Pipeline
 
