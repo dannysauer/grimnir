@@ -20,7 +20,7 @@ from typing import Annotated
 
 from csi_models import TrainedModel
 from csi_models.features import FeatureConfig
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Header, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select, text

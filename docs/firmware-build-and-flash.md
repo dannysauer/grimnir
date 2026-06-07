@@ -3,14 +3,22 @@
 Huginn (transmitter) and Muninn (receiver) are built with Espressif ESP-IDF v5.1+
 for the ESP32-S3 target.
 
-Because the firmware embeds Wi-Fi credentials and the aggregator hostname at compile
-time, builds are done locally and firmware is not published as CI artefacts.
+Because the firmware embeds Wi-Fi credentials, the aggregator hostname, and the
+Huginn transmitter MAC at compile time, builds are done locally and firmware is
+not published as CI artefacts.
 
 ---
 
 ## Before you build
 
-Edit `firmware/config.h` with your values:
+Copy the local override template and fill in your values:
+
+```bash
+cp firmware/config.local.h.example firmware/config.local.h
+```
+
+`firmware/config.local.h` is gitignored. Values defined there override the
+defaults in `firmware/config.h`.
 
 ```c
 #define WIFI_SSID           "YourNetworkSSID"
@@ -37,6 +45,10 @@ Edit `firmware/config.h` with your values:
 // `_syslog._udp.<domain>` through DHCP-provided DNS and ships logs there over
 // plain UDP syslog. If omitted, Muninn derives the domain from AGGREGATOR_HOST.
 //#define SYSLOG_DISCOVERY_DOMAIN "home.example.com"
+
+// MAC address of the Huginn transmitter board. Muninn discards CSI from other
+// senders. Read this from Huginn's serial monitor output.
+#define HUGINN_MAC          {0x1c, 0xdb, 0xd4, 0x78, 0x6a, 0xa4}
 ```
 
 The transmitter (Huginn) does not use `AGGREGATOR_HOST` or `RECEIVER_NAME` — those
@@ -77,7 +89,8 @@ idf.py build
 
 ### 3. Build Muninn (receiver)
 
-Edit `firmware/config.h` — set `RECEIVER_NAME` to the unique name for this board.
+Edit `firmware/config.local.h` and set `RECEIVER_NAME` to the unique name for
+this board.
 
 ```bash
 cd firmware/muninn
@@ -139,8 +152,8 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 write_flash 0x0 build/merged-flash
    - Select ESP-IDF version **v5.3** (or latest v5.x)
    - Target: **esp32s3**
 4. Open the `firmware/huginn` or `firmware/muninn` folder in VS Code
-5. Click the **Build** button (🔨) in the status bar
-6. Click the **Flash** button (⚡) to flash
+5. Click the **Build** button in the status bar
+6. Click the **Flash** button to flash
 
 ### Option B — IDF Installation Manager (standalone GUI)
 
@@ -181,7 +194,8 @@ pio run
 
 ### 2. Build Muninn (receiver)
 
-Edit `firmware/config.h` — set `RECEIVER_NAME` to the unique name for this board.
+Edit `firmware/config.local.h` and set `RECEIVER_NAME` to the unique name for
+this board.
 
 ```bash
 cd firmware/muninn
@@ -209,12 +223,12 @@ pio run -t upload --upload-port /dev/ttyACM0
 
 ## Flashing multiple Muninn receivers
 
-Each Muninn must have a unique `RECEIVER_NAME` in `firmware/config.h`.
+Each Muninn must have a unique `RECEIVER_NAME` in `firmware/config.local.h`.
 The recommended workflow for multiple boards:
 
-1. Edit `config.h` — set `RECEIVER_NAME = "grimnir-rx-ground-floor"`
+1. Edit `config.local.h` and set `RECEIVER_NAME = "grimnir-rx-ground-floor"`
 2. Flash board 1
-3. Edit `config.h` — set `RECEIVER_NAME = "grimnir-rx-upstairs-east"`
+3. Edit `config.local.h` and set `RECEIVER_NAME = "grimnir-rx-upstairs-east"`
 4. Flash board 2
 5. Repeat for additional boards
 
@@ -224,6 +238,34 @@ DB setup is required.
 ---
 
 ## Verifying operation
+
+With `idf.py monitor` or `pio device monitor` running on a Muninn board, check
+for these milestones:
+
+1. Wi-Fi connects to the expected SSID and channel.
+2. Muninn resolves `AGGREGATOR_HOST`.
+3. Muninn enables CSI capture.
+4. Geri receives packets and sends `grimnir-ack`.
+5. Muninn logs `Aggregator ACKs flowing`.
+6. Freki shows the receiver in the dashboard at `http://<freki-host>:8000`.
+
+Example monitor output:
+
+```
+I (1234) CSI_WIFI: Connected: SSID=YourNet ch=6
+I (1456) CSI_UDP: Aggregator: csi-aggregator.home.example.com -> 192.0.2.50:5005
+I (1678) CSI_DATA: CSI capture enabled
+I (1810) CSI_UDP: Aggregator ACKs flowing
+I (1900) CSI_DATA: Streaming CSI -> csi-aggregator.home.example.com:5005
+```
+
+If ACKs never flow, check:
+
+- `AGGREGATOR_HOST` resolves from the receiver network.
+- UDP port 5005 reaches the Geri service.
+- Geri logs show `udp.listening`.
+- `HUGINN_MAC` in `config.local.h` matches the transmitter board MAC.
+- Huginn and Muninn are on the same configured CSI Wi-Fi channel.
 
 ## Optional BIND-based syslog discovery
 
@@ -242,15 +284,5 @@ logs.home.example.com.                 300 IN A   192.168.0.10
 With that in place, Muninn will query `_syslog._udp.home.example.com`, resolve
 the SRV target, and forward the same serial log stream to that syslog endpoint.
 
-With `idf.py monitor` running on a Muninn board, you should see:
-
-```
-I (1234) CSI_WIFI: Connected: SSID=YourNet ch=6
-I (1456) CSI_UDP: Aggregator: csi-aggregator.home.example.com → 192.168.1.50:5005
-I (1678) CSI_DATA: CSI capture enabled
-I (1810) CSI_UDP: Aggregator ACKs flowing
-I (1900) CSI_DATA: Streaming CSI → csi-aggregator.home.example.com:5005
-```
-
-On the dashboard (`http://<freki-host>:8000`), the receiver card for this board
-should appear within a few seconds and show a live RSSI reading.
+Syslog discovery is optional. It should not be required for packet ingest,
+dashboard receiver visibility, or ACK flow.
