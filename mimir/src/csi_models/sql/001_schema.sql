@@ -7,7 +7,8 @@
 --
 -- Then run:
 --   psql -U postgres -c "CREATE DATABASE csi;"
---   psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme'; GRANT ALL ON DATABASE csi TO csi_user;"
+--   createuser -U postgres --pwprompt csi_user
+--   psql -U postgres -c "GRANT ALL ON DATABASE csi TO csi_user;"
 --   psql -U postgres -d csi -f mimir/001_schema.sql
 -- =============================================================================
 

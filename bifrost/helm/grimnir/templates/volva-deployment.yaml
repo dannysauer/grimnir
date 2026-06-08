@@ -17,7 +17,6 @@ spec:
     metadata:
       labels:
         {{- include "grimnir.selectorLabels" (merge (dict "component" "volva") .) | nindent 8 }}
-        app.kubernetes.io/component: volva
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import Header, HTTPException
 
 ML_CONTROL_SHARED_SECRET = os.environ.get("ML_CONTROL_SHARED_SECRET", "")
-ML_CONTROL_SECRET_HEADER = "X-Grimnir-ML-Control-Secret"
+ML_CONTROL_SECRET_HEADER = "X-Grimnir-ML-Control-Secret"  # pragma: allowlist secret
 
 
 def require_ml_control_secret(

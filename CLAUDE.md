@@ -31,11 +31,10 @@ See `GRIMNIR.md` for the full naming reference. Summary:
 ## Hardware
 
 - **1× ESP32-S3** transmitter (Huginn) — broadcasts UDP beacons at 10 Hz
-- **2× ESP32-S3** receivers (Muninn) — capture CSI, stream to aggregator
+- **2+ ESP32-S3** receivers (Muninn) — capture CSI, stream to aggregator
 - Expandable to 6 total devices (1 tx + 5 rx) without schema changes
-- **humpy** — Ubuntu 20.04 NAS/server running PostgreSQL 12 + TimescaleDB 2.11.2
-- Kubernetes cluster available for container workloads
-- GPU machines (Tesla M4, P100) available for ML training
+- External PostgreSQL 12+ with TimescaleDB 2.11+
+- Docker Compose for standalone deployment, or Kubernetes for Helm deployment
 
 ## Repository Structure
 
@@ -53,12 +52,16 @@ grimnir/
 │   └── hooks/
 │       └── pre-commit-check.sh     # PreToolUse hook script
 ├── docs/
+│   ├── api-reference.md            # Freki and Volva HTTP/SSE surface
+│   ├── deployment.md               # Compose, Helm, Ansible, DB setup
 │   ├── firmware-build-and-flash.md # Linux + Windows firmware build guide
+│   ├── monorepo.md                 # Component map and command matrix
+│   ├── udp-wire-protocol.md        # Muninn-to-Geri UDP packet contract
 │   └── style-guides/
 │       └── google/                 # Google style guides (git subtree, gh-pages branch)
 │           ├── pyguide.md          # Python style guide
 │           ├── shellguide.md       # Shell style guide
-│           └── ...                 # cppguide.html, jsguide.html, etc.
+│           └── additional vendored Google style guide files
 ├── mimir/
 │   ├── pyproject.toml
 │   ├── 001_schema.sql              # SQL reference for the schema/bootstrap
@@ -114,7 +117,7 @@ grimnir/
 ├── hlidskjalf/
 │   └── index.html                  # Single-file mobile-first dashboard (vanilla JS)
 ├── firmware/
-│   ├── config.h                    # ← EDIT BEFORE FLASHING each board
+│   ├── config.h                    # Shared defaults; override with config.local.h
 │   ├── huginn/
 │   │   ├── platformio.ini          # PlatformIO build (framework = espidf)
 │   │   └── main/main.c             # Transmitter ESP-IDF v5.1+ C firmware
@@ -123,9 +126,11 @@ grimnir/
 │       └── main/main.c             # Receiver ESP-IDF v5.1+ C firmware
 └── bifrost/                        # Deployment: Compose + Helm + Ansible
     ├── compose.yaml
-    ├── helm/grimnir/               # Helm chart (both geri + freki)
+    ├── helm/grimnir/               # Helm chart (geri, freki, nornir, volva)
     │   ├── Chart.yaml
-    │   ├── values.yaml             # All options documented inline
+    │   ├── README.md               # Chart package entrypoint
+    │   ├── values.yaml             # Defaults with inline comments
+    │   ├── values.schema.json      # Helm values validation
     │   ├── files/
     │   │   └── grimnir-dashboard.json  # Grafana dashboard (Helm .Files.Get)
     │   └── templates/              # Kubernetes manifests
@@ -314,7 +319,7 @@ Helm's `{{ }}` syntax is not valid YAML.
 
 ## Database
 
-**Server:** humpy (Ubuntu 20.04), PostgreSQL 12, TimescaleDB 2.11.2
+**Server:** external PostgreSQL 12+ with TimescaleDB 2.11+
 **Database name:** `csi`
 **User:** `csi_user`
 
@@ -342,18 +347,19 @@ is bundled into the installed package for first-boot bootstrap.
 **Privilege requirement for fully automatic first boot:** the target database
 must either already have the `timescaledb` extension installed, or the
 configured role must be able to run `CREATE EXTENSION timescaledb`. On
-PostgreSQL 12 / TimescaleDB 2.11 that typically means a superuser role.
+PostgreSQL 12 / TimescaleDB 2.11 that typically means an elevated role.
 
-To bootstrap a fresh database manually:
+Recommended bootstrap:
 ```bash
 psql -U postgres -c "CREATE DATABASE csi;"
-psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme' CREATEDB;"
-psql -U postgres -c "ALTER USER csi_user WITH SUPERUSER;"
+psql -U postgres -d csi -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+createuser -U postgres --pwprompt csi_user
 psql -U postgres -c "GRANT ALL ON DATABASE csi TO csi_user;"
-psql -U postgres -d csi -f mimir/001_schema.sql
+psql -U postgres -d csi -c "GRANT CREATE ON SCHEMA public TO csi_user;"
 ```
-Or just start a service with `DATABASE_URL` set — the bundled SQL bootstrap will
-create the schema automatically if the role has the required privileges.
+Then start a service with `DATABASE_URL` set. The bundled SQL bootstrap creates
+the schema automatically. If a lab bootstrap temporarily grants superuser to the
+runtime role, revoke it after `migrations.done`.
 
 ## UDP Wire Protocol
 
@@ -426,8 +432,8 @@ Reader-facing deployment contract: `docs/deployment.md`.
 
 ### Standalone (Docker Compose)
 
-The compose file uses the external database on humpy — it does NOT spin up a
-Postgres container. Set `DATABASE_URL` in `.env` to point at humpy.
+The compose file uses an external database; it does NOT spin up a Postgres
+container. Set `DATABASE_URL` in `.env`.
 
 ```bash
 cp .env.example .env
@@ -439,14 +445,16 @@ docker compose -f bifrost/compose.yaml up -d
 
 ```bash
 ansible-playbook bifrost/ansible/deploy.yaml \
-  -e db_url="postgresql+asyncpg://csi_user:changeme@humpy.home.arpa:5432/csi" \
-  -e registry="your-registry.example.com" \
-  -e aggregator_lb_ip="192.168.1.50"
+  -e db_url="postgresql+asyncpg://csi_user@db.example.com:5432/csi" \
+  -e metallb_pool="default" \
+  -e metallb_lb_ip="192.0.2.50" \
+  -e freki_hostname="grimnir.home.example.com"
 ```
 
-The geri Service should be type LoadBalancer. Use MetalLB address pool annotations
-and external-dns `hostname` annotation to get an IP from the pool and create DNS
-automatically — no static IP configuration required:
+The Geri Service should be type LoadBalancer. Use MetalLB address pool
+annotations and external-dns `hostname` annotation to get an IP from the pool and
+create DNS automatically. Set `geri.service.loadBalancerIP` only when the target
+cluster still expects `spec.loadBalancerIP`:
 
 ```yaml
 geri:
@@ -496,9 +504,10 @@ Helm chart supports optional `ServiceMonitor` resources and a Grafana sidecar
 
 See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 
-- [ ] **Tests** (#4) — pytest + pytest-asyncio; `parser.py` is highest priority
+- [ ] **Supply chain security** (#3) — SBOMs, image signing, VEX, and attestations
 - [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth. Narrow mitigations: `POST /api/models` can be gated with `MODEL_UPLOAD_SHARED_SECRET` (#29), and Nornir's daemon/job ML control writes can be gated with `ML_CONTROL_SHARED_SECRET` (#27).
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
+- [ ] **Pet vs human labels** (#14) — split occupant tracking before relying on human-only counts
 
 ## ML Pipeline
 
@@ -536,5 +545,6 @@ extractor output changes, which Völva enforces on model load.
 label — `occupants` currently includes pets (#14). A predicted room is reported
 as `human_count=1` with all other known rooms at `0`.
 
-GPU machines (Tesla P100) are available if a future trainer needs them; the
-current `RandomForestClassifier` trains on CPU in seconds on typical datasets.
+The current `RandomForestClassifier` trains on CPU in seconds on typical home
+datasets. Add hardware-specific trainer notes only when the code uses that
+hardware path.

@@ -3,7 +3,7 @@
 # Provision the external PostgreSQL/TimescaleDB database, then deploy Grimnir.
 #
 # This playbook assumes:
-# - PostgreSQL runs on the Ansible host named `humpy`
+# - PostgreSQL runs on the Ansible host named by `grimnir_db_admin_host`
 # - PostgreSQL local peer auth allows `become_user: postgres`
 # - k3s access is available from localhost via ~/.kube/config
 # - the Grimnir chart is published to GHCR as an OCI chart
@@ -12,7 +12,7 @@
 #   ansible-playbook bifrost/ansible/install.yaml -e @/path/to/grimnir.yml
 
 - name: Provision Grimnir database
-  hosts: "{{ grimnir_db_admin_host | default('humpy') }}"
+  hosts: "{{ grimnir_db_admin_host | default('grimnir-db-admin') }}"
   gather_facts: false
   become: true
   become_user: postgres
@@ -122,14 +122,14 @@
     grimnir_release_name: grimnir
     grimnir_chart_ref: oci://ghcr.io/dannysauer/charts/grimnir
     grimnir_chart_version: ""
-    grimnir_db_host: humpy.home.dannysauer.com
+    grimnir_db_host: db.home.example.com
     grimnir_db_port: 5432
     grimnir_db_name: grimnir
     grimnir_db_user: grimnir
     grimnir_db_password: ""
-    grimnir_freki_hostname: grimnir.home.dannysauer.com
+    grimnir_freki_hostname: grimnir.home.example.com
     grimnir_freki_ingress_class: traefik
-    grimnir_geri_hostname: grimnir-udp.home.dannysauer.com
+    grimnir_geri_hostname: grimnir-udp.home.example.com
     grimnir_metallb_pool: ""
     grimnir_geri_loadbalancer_ip: ""
 

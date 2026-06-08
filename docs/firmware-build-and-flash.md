@@ -247,7 +247,7 @@ for these milestones:
 3. Muninn enables CSI capture.
 4. Geri receives packets and sends `grimnir-ack`.
 5. Muninn logs `Aggregator ACKs flowing`.
-6. Freki shows the receiver in the dashboard at `http://<freki-host>:8000`.
+6. Freki shows the receiver in the dashboard at `http://FREKI_HOST:8000`.
 
 Example monitor output:
 
@@ -278,7 +278,7 @@ Publish records like:
 
 ```dns
 _syslog._udp.home.example.com.         300 IN SRV 0 0 514 logs.home.example.com.
-logs.home.example.com.                 300 IN A   192.168.0.10
+logs.home.example.com.                 300 IN A   192.0.2.10
 ```
 
 With that in place, Muninn will query `_syslog._udp.home.example.com`, resolve

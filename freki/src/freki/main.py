@@ -8,7 +8,7 @@ Startup sequence:
   4. Serve FastAPI via uvicorn
 
 Environment variables:
-  DATABASE_URL               postgresql+asyncpg://user:pass@host:5432/csi
+  DATABASE_URL               postgresql+asyncpg://user@host:5432/csi
   HOST                       bind address (default 0.0.0.0)
   PORT                       bind port (default 8000)
   LOG_LEVEL                  debug | info | warning | error (default info)

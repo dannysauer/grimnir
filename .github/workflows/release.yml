@@ -240,8 +240,7 @@ jobs:
             echo ""
             echo '```bash'
             echo "helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \\"
-            echo "  --version <chart-version> \\"
-            echo '  --set database.url="postgresql+asyncpg://user:pass@host:5432/csi"'
+            echo '  --set database.url="postgresql+asyncpg://csi_user@db.example.com:5432/csi"'
             echo '```'
           } > release-notes.md
 

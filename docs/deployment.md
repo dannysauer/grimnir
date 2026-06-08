@@ -13,8 +13,11 @@ PostgreSQL with TimescaleDB is external in all shipped deployment modes.
 Set `DATABASE_URL` to a PostgreSQL URL that uses the asyncpg SQLAlchemy driver:
 
 ```text
-postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi
+postgresql+asyncpg://csi_user@db.example.com:5432/csi
 ```
+
+The examples in this repository omit passwords. Use the same URL shape with your
+real credentials in `.env`, an uncommitted values file, or a Kubernetes Secret.
 
 On startup, Geri and Freki call `run_migrations(DATABASE_URL)` from the Mimir
 package. That code converts the URL to `postgresql+psycopg2://` for synchronous
@@ -24,21 +27,36 @@ numbered SQL migrations.
 The target database must either already have the `timescaledb` extension
 installed, or the configured database role must be able to run
 `CREATE EXTENSION timescaledb`. On PostgreSQL 12 and TimescaleDB 2.11, fully
-automatic first boot commonly requires a superuser role unless the extension is
+automatic first boot commonly requires an elevated role unless the extension is
 preinstalled by an administrator.
 
-Manual bootstrap reference:
+Recommended bootstrap, with the extension installed by a database administrator
+before the runtime role is used by Grimnir:
 
 ```bash
 psql -U postgres -c "CREATE DATABASE csi;"
-psql -U postgres -c "CREATE USER csi_user WITH PASSWORD 'changeme' CREATEDB;"
-psql -U postgres -c "ALTER USER csi_user WITH SUPERUSER;"
+psql -U postgres -d csi -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+createuser -U postgres --pwprompt csi_user
 psql -U postgres -c "GRANT ALL ON DATABASE csi TO csi_user;"
-psql -U postgres -d csi -f mimir/001_schema.sql
+psql -U postgres -d csi -c "GRANT CREATE ON SCHEMA public TO csi_user;"
 ```
 
-For long-running deployments, prefer preinstalling TimescaleDB and using the
-least-privileged database role that still supports the chosen bootstrap model.
+After this, start Freki or Geri with `DATABASE_URL`; the bundled Mimir migrations
+create and update Grimnir tables.
+
+For a short-lived lab bootstrap, you can grant the runtime role the elevated
+permissions required to create TimescaleDB objects, start one service once so
+Mimir applies migrations, then revoke the elevation:
+
+```bash
+psql -U postgres -c "ALTER USER csi_user WITH SUPERUSER;"
+# Start Freki or Geri once and wait for "migrations.done" in the service logs.
+psql -U postgres -c "ALTER USER csi_user WITH NOSUPERUSER;"
+```
+
+Do not leave the Grimnir runtime role as a superuser in a long-running
+deployment. If migrations fail, stop the services and inspect
+`schema_migrations` before granting broader privileges again.
 
 ## Docker Compose
 
@@ -89,18 +107,25 @@ oci://ghcr.io/dannysauer/charts/grimnir
 Minimal install:
 
 ```bash
+CHART_VERSION=0.1.1
 helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
-  --set database.url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi"
+  --version "$CHART_VERSION" \
+  --set database.url="postgresql+asyncpg://csi_user@db.example.com:5432/csi"
 ```
+
+The chart also has a GitHub-rendered package entrypoint at
+[`bifrost/helm/grimnir/README.md`](../bifrost/helm/grimnir/README.md). Use that
+page for the full values reference, secret options, upgrade commands, and
+package metadata.
 
 For local chart validation from the repository:
 
 ```bash
 helm lint bifrost/helm/grimnir \
-  --set database.url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi"
+  --set database.url="postgresql+asyncpg://csi_user@db.example.com:5432/csi"
 
 helm template grimnir bifrost/helm/grimnir \
-  --set database.url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi"
+  --set database.url="postgresql+asyncpg://csi_user@db.example.com:5432/csi"
 ```
 
 The chart deploys these workloads:
@@ -158,14 +183,20 @@ Example:
 
 ```bash
 ansible-playbook bifrost/ansible/deploy.yaml \
-  -e db_url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi" \
-  -e aggregator_lb_ip="192.0.2.50" \
+  -e db_url="postgresql+asyncpg://csi_user@db.example.com:5432/csi" \
+  -e metallb_pool="default" \
+  -e metallb_lb_ip="192.0.2.50" \
   -e freki_hostname="grimnir.home.example.com"
 ```
 
 Use the Ansible path when you want a repeatable home-cluster deployment with
 MetalLB or external-dns inputs. Use direct Helm commands when iterating on chart
 changes.
+
+`bifrost/ansible/deploy.yaml` builds and pushes all four service images with the
+same `image_tag` value, then deploys the local chart. Use
+`bifrost/ansible/install.yaml` when you want the database provisioning path and a
+published OCI chart instead.
 
 ## Security Notes
 
@@ -190,7 +221,8 @@ Helm:
 
 ```bash
 helm history grimnir
-helm rollback grimnir <REVISION>
+REVISION=1
+helm rollback grimnir "$REVISION"
 kubectl rollout status deployment/grimnir-freki
 ```
 

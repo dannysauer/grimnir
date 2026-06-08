@@ -22,7 +22,7 @@ project vocabulary, not a pending rename plan.
 
 - Python package names are lowercase: `geri`, `freki`, `nornir`, `volva`,
   and `csi-models`.
-- Docker images are published under `ghcr.io/dannysauer/grimnir/<component>`.
+- Docker images are published under `ghcr.io/dannysauer/grimnir/COMPONENT`.
 - The Helm chart name and expected release name are both `grimnir`.
 - Firmware receiver names should be stable and location-oriented, such as
   `grimnir-rx-office` or `grimnir-rx-upstairs`.

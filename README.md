@@ -24,6 +24,7 @@ Start here, then follow the component docs for the task you are doing:
 | Read the Freki REST/SSE API and service health endpoints | [API reference](docs/api-reference.md) |
 | Read the Muninn-to-Geri UDP packet contract | [UDP wire protocol](docs/udp-wire-protocol.md) |
 | Run the stack with Compose, Helm, or Ansible | [Deployment guide](docs/deployment.md) |
+| Install or configure the Helm chart directly | [Helm chart README](bifrost/helm/grimnir/README.md) |
 | Understand the component names | [Naming reference](GRIMNIR.md) |
 | Track known follow-up work | [TODO checklist](TODO.md) |
 
@@ -68,8 +69,11 @@ Create a database or point Grimnir at an existing PostgreSQL database with the
 TimescaleDB extension available. The runtime URL must use the asyncpg driver:
 
 ```bash
-postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi
+postgresql+asyncpg://csi_user@db.example.com:5432/csi
 ```
+
+The example omits a password. Put the real credential-bearing URL in `.env` for
+Compose, or in a Kubernetes Secret for Helm.
 
 For a standalone Compose run:
 
@@ -82,8 +86,10 @@ docker compose -f bifrost/compose.yaml up -d
 For Helm:
 
 ```bash
+CHART_VERSION=0.1.1
 helm install grimnir oci://ghcr.io/dannysauer/charts/grimnir \
-  --set database.url="postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi"
+  --version "$CHART_VERSION" \
+  --set database.url="postgresql+asyncpg://csi_user@db.example.com:5432/csi"
 ```
 
 For firmware:

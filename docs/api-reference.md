@@ -1,9 +1,10 @@
 # API Reference
 
 Freki is the public HTTP API for Grimnir. It also serves Hlidskjalf, the
-single-file dashboard, when the frontend directory is present in the container.
+single-file dashboard, when `FRONTEND_DIR` points at the dashboard directory in
+the container.
 
-At runtime, FastAPI also exposes generated OpenAPI and browser docs:
+At runtime, FastAPI exposes generated OpenAPI and browser docs:
 
 | Path | Purpose |
 |------|---------|
@@ -13,6 +14,19 @@ At runtime, FastAPI also exposes generated OpenAPI and browser docs:
 
 These generated pages are useful for exact request and response schemas. This
 document records the stable product surface and integration behavior.
+
+## Dashboard and Generated Documentation
+
+When `FRONTEND_DIR` exists, Freki mounts it at `/` with FastAPI `StaticFiles` and
+HTML index fallback enabled.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | None | Hlidskjalf dashboard shell from `hlidskjalf/index.html`. |
+| GET | `/label-preview.html` | None | Static label-preview helper page when present in the frontend directory. |
+| GET | `/openapi.json` | None | Generated Freki OpenAPI schema. |
+| GET | `/docs` | None | Generated Swagger UI. |
+| GET | `/redoc` | None | Generated ReDoc UI. |
 
 ## Service Endpoints
 
@@ -64,7 +78,7 @@ training job claim, heartbeat, complete, and fail calls.
 | GET | `/api/training-daemons` | None | Lists registered training daemons. |
 | POST | `/api/training-daemons/heartbeat` | JSON `name`, `host`, optional `ip_address`, optional `capabilities` | Upserts a daemon row and updates `last_seen`. Requires ML control secret when configured. |
 | GET | `/api/training-jobs` | Optional `status`, optional `limit`, default 50, max 500 | Lists training jobs. |
-| POST | `/api/training-jobs` | JSON `{"spec": {...}}` | Enqueues a job. Validates time order and room names. |
+| POST | `/api/training-jobs` | JSON object with a `spec` object | Enqueues a job. Validates time order and room names. |
 | POST | `/api/training-jobs/{job_id}/claim` | JSON `{"daemon_id": integer}` | Claims a queued job with a race-free conditional update. Requires ML control secret when configured. |
 | POST | `/api/training-jobs/{job_id}/heartbeat` | JSON `daemon_id`, `claim_token` | Updates heartbeat for the owning daemon and claim token. |
 | POST | `/api/training-jobs/{job_id}/complete` | JSON `daemon_id`, `claim_token` | Marks the owned running job complete and clears the claim token. |
@@ -116,12 +130,31 @@ Prediction envelope shape:
 ## Volva Service Endpoints
 
 Volva has no public prediction API. It dials Freki, consumes `/api/csi-stream`,
-and writes `/api/predictions/current`.
+and writes `/api/predictions/current`. Because Volva is also a FastAPI service,
+it exposes generated framework docs at `/openapi.json`, `/docs`, and `/redoc`;
+those generated routes describe the service-local health endpoint, not the
+Grimnir prediction product API.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Returns service status, active model id, and model age. |
 | GET | `/metrics` | Prometheus metrics for active model state and HTTP instrumentation. |
+
+## Runtime Configuration
+
+These variables are part of the HTTP-facing behavior and are useful when
+debugging API or stream behavior:
+
+| Service | Variable | Default | Behavior |
+|---------|----------|---------|----------|
+| Freki | `FRONTEND_DIR` | `/app/frontend` | Directory mounted at `/` when it exists. |
+| Freki | `ORPHAN_CHECK_INTERVAL_S` | `60` | Poll interval for the training-job orphan reaper. |
+| Freki | `ORPHAN_TIMEOUT_S` | `300` | Running-job heartbeat age before the reaper marks it failed. |
+| Freki | `CSI_STREAM_INTERVAL_MS` | `200` | Poll interval for `/api/csi-stream`; values below 50 ms are clamped to 50 ms. |
+| Freki | `CSI_STREAM_MAX_BATCH` | `200` | Maximum CSI rows emitted per stream poll before older backlog is skipped. |
+| Geri | `ACK_INTERVAL_S` | `5` | Minimum seconds between UDP ACKs sent to the same Muninn sender address. |
+| Volva | `WINDOW_SIZE` | `50` | CSI rows per receiver window used for live inference. |
+| Volva | `MODEL_REFRESH_S` | `30` | Active-model refresh interval. |
 
 ## Source of Truth
 
