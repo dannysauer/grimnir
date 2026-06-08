@@ -30,7 +30,7 @@ from ..db import SessionDep
 router = APIRouter()
 
 MODEL_UPLOAD_SHARED_SECRET = os.environ.get("MODEL_UPLOAD_SHARED_SECRET", "")
-MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"
+MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"  # pragma: allowlist secret
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────

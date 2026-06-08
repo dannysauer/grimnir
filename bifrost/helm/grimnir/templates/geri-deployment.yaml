@@ -15,7 +15,6 @@ spec:
     metadata:
       labels:
         {{- include "grimnir.selectorLabels" (merge (dict "component" "geri") .) | nindent 8 }}
-        app.kubernetes.io/component: geri
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

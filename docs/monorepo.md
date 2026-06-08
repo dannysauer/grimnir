@@ -5,6 +5,40 @@ database migrations, a static dashboard, container definitions, and deployment
 assets. Work from the repository root unless a command explicitly says to
 change directories.
 
+## Runtime Flow
+
+The following diagram shows how the main components exchange CSI samples,
+training jobs, model artifacts, and current predictions:
+
+```mermaid
+flowchart LR
+    huginn["Huginn transmitter firmware"]
+    muninn["Muninn receiver firmware"]
+    geri["Geri UDP aggregator"]
+    db["PostgreSQL + TimescaleDB"]
+    freki["Freki API and dashboard server"]
+    dashboard["Hlidskjalf dashboard"]
+    nornir["Nornir training daemon"]
+    volva["Volva inference service"]
+    consumers["Consumers such as Home Assistant"]
+
+    huginn -->|"802.11 beacon frames"| muninn
+    muninn -->|"CSI UDP packets"| geri
+    geri -->|"CSI rows and receiver heartbeats"| db
+    db --> freki
+    freki --> dashboard
+    freki -->|"training jobs and labeled CSI"| nornir
+    nornir -->|"model artifact and job status"| freki
+    freki -->|"live CSI stream and active model"| volva
+    volva -->|"current prediction"| freki
+    freki --> consumers
+```
+
+In text form, Huginn creates radio frames, Muninn converts received CSI into UDP
+packets, Geri writes samples to TimescaleDB, Freki exposes the dashboard/API and
+coordinates model training, Nornir trains models, and Volva publishes live room
+predictions back through Freki.
+
 ## Component Map
 
 | Component | Path | Runtime role | Build or test entry point |
@@ -50,9 +84,10 @@ not the individual service directory.
 | Run all configured pre-commit hooks | Repository root | `pre-commit run --all-files` | Ruff, formatting, shell, GitHub Actions, YAML/JSON, and hygiene checks pass. |
 | Run Geri tests | Repository root | `pytest geri/tests` | Parser and aggregator tests pass. |
 | Run Freki tests | Repository root | `pytest freki/tests` | API router and auth tests pass. |
-| Validate Compose configuration | Repository root | `DATABASE_URL='postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi' docker compose -f bifrost/compose.yaml config` | Compose renders the full four-service stack. |
-| Lint Helm chart | Repository root | `helm lint bifrost/helm/grimnir --set database.url='postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi'` | Chart lint passes. |
-| Render Helm chart | Repository root | `helm template grimnir bifrost/helm/grimnir --set database.url='postgresql+asyncpg://csi_user:changeme@db.example.com:5432/csi'` | Kubernetes manifests render. |
+| Validate Compose configuration | Repository root | `DATABASE_URL='postgresql+asyncpg://csi_user@db.example.com:5432/csi' docker compose -f bifrost/compose.yaml config` | Compose renders the full four-service stack. |
+| Lint Helm chart | Repository root | `helm lint bifrost/helm/grimnir --set database.url='postgresql+asyncpg://csi_user@db.example.com:5432/csi'` | Chart lint passes. |
+| Render Helm chart | Repository root | `helm template grimnir bifrost/helm/grimnir --set database.url='postgresql+asyncpg://csi_user@db.example.com:5432/csi'` | Kubernetes manifests render. |
+| Validate Helm values schema | Repository root | `helm lint bifrost/helm/grimnir --set database.url='postgresql+asyncpg://csi_user@db.example.com:5432/csi'` | `values.schema.json` accepts the supplied values and rejects invalid shapes. |
 | Build Huginn firmware | `firmware/huginn/` | `idf.py set-target esp32s3 && idf.py build` | ESP-IDF produces firmware build output. |
 | Build Muninn firmware | `firmware/muninn/` | `idf.py set-target esp32s3 && idf.py build` | ESP-IDF produces firmware build output. |
 | Build firmware with PlatformIO | `firmware/huginn/` or `firmware/muninn/` | `pio run` | PlatformIO builds using `framework = espidf`. |
@@ -77,6 +112,6 @@ When changing a component, update the docs that describe its public behavior:
 |-------------|---------------|
 | Freki route, request body, response body, auth, or SSE behavior | `docs/api-reference.md`, `CLAUDE.md`, and tests. |
 | Muninn packet layout or parser behavior | `docs/udp-wire-protocol.md`, `docs/firmware-build-and-flash.md`, `geri/src/geri/parser.py`, and parser tests. |
-| Compose, Helm, Ansible, environment variables, ports, or image names | `docs/deployment.md`, `README.md`, `.env.example`, and `bifrost/helm/grimnir/values.yaml`. |
+| Compose, Helm, Ansible, environment variables, ports, or image names | `docs/deployment.md`, `README.md`, `.env.example`, `bifrost/helm/grimnir/README.md`, `bifrost/helm/grimnir/values.yaml`, and `bifrost/helm/grimnir/values.schema.json`. |
 | Firmware setup or flash workflow | `docs/firmware-build-and-flash.md`, `firmware/config.h`, and `firmware/config.local.h.example`. |
 | Component names, paths, or package boundaries | `README.md`, `GRIMNIR.md`, `docs/monorepo.md`, and `CLAUDE.md`. |

@@ -6,7 +6,7 @@
 #
 # Exposes:
 #   UDP 5005  — ESP32 CSI data ingress (Geri)
-#   TCP 8000  — Web dashboard + API (Freki + Hlidskjalf)
+#   TCP ${BACKEND_PORT:-8000} — Web dashboard + API (Freki + Hlidskjalf)
 #
 # Note: PostgreSQL is NOT included — provide DATABASE_URL in .env pointing at
 #       your existing TimescaleDB instance.
@@ -26,6 +26,7 @@ services:
       BATCH_SIZE:       "50"
       BATCH_TIMEOUT_MS: "500"
       LOG_LEVEL:        "info"
+      METRICS_PORT:     ${GERI_METRICS_PORT:-8001}
     ports:
       - "5005:5005/udp"
     networks:
@@ -50,7 +51,7 @@ services:
       MODEL_UPLOAD_SHARED_SECRET: ${MODEL_UPLOAD_SHARED_SECRET:-}
       ML_CONTROL_SHARED_SECRET: ${ML_CONTROL_SHARED_SECRET:-}
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     networks:
       - grimnir-internal
     healthcheck:

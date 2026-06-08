@@ -8,7 +8,7 @@ Startup sequence:
   4. Batch-write CSI packets to TimescaleDB
 
 Environment variables:
-  DATABASE_URL      postgresql+asyncpg://user:pass@host:5432/csi
+  DATABASE_URL      postgresql+asyncpg://user@host:5432/csi
   UDP_HOST          bind address (default 0.0.0.0)
   UDP_PORT          bind port (default 5005)
   BATCH_SIZE        rows to buffer before flushing (default 50)
@@ -95,7 +95,8 @@ class CSIUDPProtocol(asyncio.DatagramProtocol):
             return
 
         now = asyncio.get_running_loop().time()
-        if now - self._last_ack_sent.get(addr, 0.0) < ACK_INTERVAL_S:
+        last_ack = self._last_ack_sent.get(addr)
+        if last_ack is not None and now - last_ack < ACK_INTERVAL_S:
             return
 
         self._transport.sendto(ACK_PAYLOAD, addr)

@@ -15,8 +15,8 @@ from typing import Any
 
 import httpx
 
-ML_CONTROL_SECRET_HEADER = "X-Grimnir-ML-Control-Secret"
-MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"
+ML_CONTROL_SECRET_HEADER = "X-Grimnir-ML-Control-Secret"  # pragma: allowlist secret
+MODEL_UPLOAD_SECRET_HEADER = "X-Grimnir-Model-Upload-Secret"  # pragma: allowlist secret
 
 
 class FrekiError(RuntimeError):

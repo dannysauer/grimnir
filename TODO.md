@@ -36,8 +36,8 @@ as GitHub issues where noted.
 
 ## Testing
 
-- [ ] **pytest + pytest-asyncio** test suite for `geri` and `freki`.
-      Priority: `geri/src/geri/parser.py` (pure function, easy to unit test).
+- [x] **pytest + pytest-asyncio** test suite for `geri` and `freki`.
+      Parser and Freki router coverage now run in CI.
       _(#4)_
 
 ---
@@ -97,10 +97,9 @@ as GitHub issues where noted.
 
 ## Helm / Kubernetes
 
-- [ ] **Helm: empty `loadBalancerIP`** — when `geri.service.loadBalancerIP` is
-      not set, the template must omit the field entirely rather than emit an
+- [x] **Helm: empty `loadBalancerIP`** — when `geri.service.loadBalancerIP` is
+      not set, the template omits the field entirely rather than emitting an
       empty string, which some cloud providers reject.
-      _(already guarded by `if` in the current template)_
 
 ---
 

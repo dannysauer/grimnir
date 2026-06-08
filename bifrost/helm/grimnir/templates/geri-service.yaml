@@ -11,6 +11,9 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.geri.service.type }}
+  {{- with .Values.geri.service.loadBalancerIP }}
+  loadBalancerIP: {{ . | quote }}
+  {{- end }}
   {{- with .Values.geri.service.externalTrafficPolicy }}
   externalTrafficPolicy: {{ . }}
   {{- end }}
