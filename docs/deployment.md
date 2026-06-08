@@ -8,6 +8,43 @@ Grimnir ships deployment assets under `bifrost/`:
 
 PostgreSQL with TimescaleDB is external in all shipped deployment modes.
 
+## Deployment Topology
+
+The shipped Compose and Helm assets deploy the four runtime services and expect
+the database and ESP32 devices to exist outside the deployment bundle:
+
+```mermaid
+flowchart LR
+    subgraph devices["ESP32 devices"]
+        huginn["Huginn transmitter"]
+        muninn["Muninn receivers"]
+    end
+
+    subgraph runtime["Compose or Helm deployment"]
+        geri["Geri UDP service"]
+        freki["Freki API and dashboard"]
+        nornir["Nornir training daemon"]
+        volva["Volva inference service"]
+    end
+
+    db["External PostgreSQL + TimescaleDB"]
+    browser["Browser / dashboard user"]
+    consumer["Automation consumer"]
+
+    huginn -->|"beacon frames"| muninn
+    muninn -->|"UDP 5005"| geri
+    geri -->|"migrations and CSI writes"| db
+    freki -->|"migrations, API reads, labels, models"| db
+    nornir -->|"training job claims and model upload"| freki
+    volva -->|"CSI stream and prediction writes"| freki
+    browser --> freki
+    consumer --> freki
+```
+
+In text form, receivers send UDP packets to Geri, Geri and Freki share the
+external TimescaleDB database, Nornir and Volva call Freki over HTTP, and users
+or automation consumers read dashboard/API state from Freki.
+
 ## Required Database
 
 Set `DATABASE_URL` to a PostgreSQL URL that uses the asyncpg SQLAlchemy driver:

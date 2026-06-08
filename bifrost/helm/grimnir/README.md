@@ -7,6 +7,33 @@ This chart installs the Grimnir home Wi-Fi CSI localization stack on Kubernetes:
 - Nornir training daemon.
 - Volva live inference service.
 
+The following diagram shows the chart-managed workloads and the external systems
+they depend on:
+
+```mermaid
+flowchart LR
+    muninn["Muninn receiver firmware"]
+    lb["Geri Service UDP 5005"]
+    geri["Geri Deployment"]
+    freki["Freki Deployment and Service"]
+    nornir["Nornir Deployment"]
+    volva["Volva Deployment and Service"]
+    db["External PostgreSQL + TimescaleDB"]
+    user["Dashboard/API user"]
+
+    muninn -->|"CSI UDP packets"| lb
+    lb --> geri
+    geri -->|"CSI rows"| db
+    freki --> db
+    nornir -->|"training jobs and model upload"| freki
+    volva -->|"CSI stream and prediction writes"| freki
+    user --> freki
+```
+
+In text form, the chart exposes Geri for receiver UDP traffic, runs Freki for the
+dashboard/API, runs Nornir and Volva as internal HTTP clients of Freki, and uses
+an external TimescaleDB-backed PostgreSQL database for persistent state.
+
 The chart is published to the GHCR OCI registry:
 
 ```bash

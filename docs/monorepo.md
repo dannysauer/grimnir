@@ -5,6 +5,40 @@ database migrations, a static dashboard, container definitions, and deployment
 assets. Work from the repository root unless a command explicitly says to
 change directories.
 
+## Runtime Flow
+
+The following diagram shows how the main components exchange CSI samples,
+training jobs, model artifacts, and current predictions:
+
+```mermaid
+flowchart LR
+    huginn["Huginn transmitter firmware"]
+    muninn["Muninn receiver firmware"]
+    geri["Geri UDP aggregator"]
+    db["PostgreSQL + TimescaleDB"]
+    freki["Freki API and dashboard server"]
+    dashboard["Hlidskjalf dashboard"]
+    nornir["Nornir training daemon"]
+    volva["Volva inference service"]
+    consumers["Consumers such as Home Assistant"]
+
+    huginn -->|"802.11 beacon frames"| muninn
+    muninn -->|"CSI UDP packets"| geri
+    geri -->|"CSI rows and receiver heartbeats"| db
+    db --> freki
+    freki --> dashboard
+    freki -->|"training jobs and labeled CSI"| nornir
+    nornir -->|"model artifact and job status"| freki
+    freki -->|"live CSI stream and active model"| volva
+    volva -->|"current prediction"| freki
+    freki --> consumers
+```
+
+In text form, Huginn creates radio frames, Muninn converts received CSI into UDP
+packets, Geri writes samples to TimescaleDB, Freki exposes the dashboard/API and
+coordinates model training, Nornir trains models, and Volva publishes live room
+predictions back through Freki.
+
 ## Component Map
 
 | Component | Path | Runtime role | Build or test entry point |
