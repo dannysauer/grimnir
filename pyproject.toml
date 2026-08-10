@@ -43,4 +43,6 @@ asyncio_mode = "auto"
 testpaths = [
     "geri/tests",
     "freki/tests",
+    "nornir/tests",
+    "volva/tests",
 ]
