@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import numpy as np
@@ -35,6 +36,20 @@ async def test_run_job_trains_and_serializes_via_offloaded_path(
 
     monkeypatch.setattr(train, "_collect_windows", _fake_collect)
 
+    # Record what run_job hands to asyncio.to_thread. This is the actual
+    # regression guard: reverting either offload to a direct synchronous call
+    # (which reintroduces the heartbeat starvation this PR fixes) drops the
+    # function from `submitted` and fails the assertion below, whereas the
+    # output assertions alone would still pass.
+    submitted: list[str] = []
+    real_to_thread = asyncio.to_thread
+
+    async def _spy_to_thread(func, /, *args, **kwargs):
+        submitted.append(getattr(func, "__name__", repr(func)))
+        return await real_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", _spy_to_thread)
+
     job = {
         "id": 1,
         "spec": {
@@ -54,3 +69,5 @@ async def test_run_job_trains_and_serializes_via_offloaded_path(
     assert metrics["n_rows_fetched"] == 200
     assert sorted(metrics["classes"]) == ["garage", "kitchen"]
     assert feature_config["version"] == FEATURE_VERSION
+    # Both CPU-bound calls must be offloaded, fit before serialize.
+    assert submitted == ["_fit_model", "_serialize"]
