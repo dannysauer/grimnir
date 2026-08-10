@@ -168,7 +168,29 @@ Instrumentator(
 ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
-@app.get("/health")
+_HEALTH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status": {"type": "string", "enum": ["ok", "degraded"]},
+        "model_id": {"type": ["integer", "null"]},
+        "model_age_seconds": {"type": "number"},
+    },
+}
+
+
+@app.get(
+    "/health",
+    responses={
+        200: {
+            "description": "Service healthy; background loops running.",
+            "content": {"application/json": {"schema": _HEALTH_SCHEMA}},
+        },
+        503: {
+            "description": "A background loop (model refresh or inference) has stopped.",
+            "content": {"application/json": {"schema": _HEALTH_SCHEMA}},
+        },
+    },
+)
 async def health() -> JSONResponse:
     holder: ModelHolder = app.state.model_holder
     model = holder.current
