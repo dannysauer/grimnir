@@ -55,7 +55,9 @@ async def fetch_active(client: httpx.AsyncClient) -> ActiveModel | None:
 
     data_resp = await client.get(f"/api/models/{meta['id']}/data")
     data_resp.raise_for_status()
-    clf = joblib.load(io.BytesIO(data_resp.content))
+    # joblib.load is synchronous and can take a while on a large forest; run it
+    # off the event loop so the refresh poll doesn't stall inference (#60).
+    clf = await asyncio.to_thread(joblib.load, io.BytesIO(data_resp.content))
 
     if not hasattr(clf, "predict") or not hasattr(clf, "classes_"):
         raise ModelLoadError("loaded object is not a sklearn classifier")
