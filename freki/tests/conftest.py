@@ -10,6 +10,9 @@ class FakeScalarSequence:
     def all(self) -> list[object]:
         return list(self._values)
 
+    def __iter__(self):
+        return iter(self._values)
+
 
 class FakeMappingSequence:
     def __init__(self, values: Sequence[object]):

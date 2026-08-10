@@ -17,14 +17,12 @@ from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from ..backfill import set_backfill_timeouts
 from ..db import SessionDep
 from ..training_samples_access import is_training_samples_permission_error
 
 router = APIRouter()
 log = structlog.get_logger(__name__)
-
-BACKFILL_LOCK_TIMEOUT = "2s"
-BACKFILL_STATEMENT_TIMEOUT = "15s"
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -69,7 +67,7 @@ async def _insert_training_samples_for_window(
     start: datetime,
     end: datetime,
 ) -> None:
-    await _set_backfill_timeouts(session)
+    await set_backfill_timeouts(session)
     await session.execute(
         text("""
             INSERT INTO training_samples
@@ -84,11 +82,6 @@ async def _insert_training_samples_for_window(
     )
 
 
-async def _set_backfill_timeouts(session: SessionDep) -> None:
-    await session.execute(text(f"SET LOCAL lock_timeout = '{BACKFILL_LOCK_TIMEOUT}'"))
-    await session.execute(text(f"SET LOCAL statement_timeout = '{BACKFILL_STATEMENT_TIMEOUT}'"))
-
-
 async def _backfill_csi_samples_best_effort(
     session: SessionDep,
     start: datetime,
@@ -96,7 +89,7 @@ async def _backfill_csi_samples_best_effort(
     room: str,
 ) -> bool:
     try:
-        await _set_backfill_timeouts(session)
+        await set_backfill_timeouts(session)
         await session.execute(
             update(CsiSample)
             .where(
@@ -166,8 +159,13 @@ async def _resync_training_samples_best_effort(
     start: datetime,
     end: datetime,
 ) -> None:
+    # Runs after the label delete has already committed, so any failure here
+    # is logged rather than raised — a 500 for a delete that succeeded would
+    # only mislead the client (#64). A lock/statement timeout is tolerated the
+    # same way as a permission denial; #64 tracks reconciliation of skipped
+    # windows.
     try:
-        await _set_backfill_timeouts(session)
+        await set_backfill_timeouts(session)
         await session.execute(
             text("DELETE FROM training_samples WHERE time >= :start AND time < :end"),
             {"start": start, "end": end},
@@ -176,11 +174,11 @@ async def _resync_training_samples_best_effort(
         await session.commit()
     except DBAPIError as exc:
         await session.rollback()
-        if not is_training_samples_permission_error(exc):
-            raise
+        reason = "permission_denied" if is_training_samples_permission_error(exc) else "db_error"
         log.warning(
             "training_samples.resync_skipped",
-            reason="permission_denied",
+            reason=reason,
+            error=str(exc.orig),
             start=start.isoformat(),
             end=end.isoformat(),
         )
@@ -239,42 +237,67 @@ async def delete_label(label_id: int, session: SessionDep):
     window_start = label.time_start
     window_end = label.time_end
 
-    # Clear labels in the deleted window, then re-apply any surviving
-    # overlapping labels so deleting one label does not erase another.
-    await session.execute(
-        update(CsiSample)
-        .where(
-            CsiSample.time >= label.time_start,
-            CsiSample.time < label.time_end,
-        )
-        .values(label=None)
-    )
+    # The label delete and its csi_samples cleanup commit together so a
+    # deleted label never leaves its backfilled samples behind. The bulk
+    # UPDATE over csi_samples can block on a compressed chunk (#49), so it
+    # runs under bounded timeouts: a write that can't finish is cancelled
+    # and the whole delete rolls back with a retryable 503 rather than
+    # hanging the request. Keeping it inline (not a background task) avoids
+    # the ordering races a deferred, key-based rewrite would introduce.
+    try:
+        await set_backfill_timeouts(session)
 
-    await session.delete(label)
-    await session.flush()
-
-    overlapping_result = await session.execute(
-        select(Label)
-        .where(
-            Label.time_start < label.time_end,
-            Label.time_end > label.time_start,
-        )
-        .order_by(Label.time_start.asc(), Label.created_at.asc(), Label.id.asc())
-    )
-
-    for overlapping_label in overlapping_result.scalars():
-        overlap_start = max(label.time_start, overlapping_label.time_start)
-        overlap_end = min(label.time_end, overlapping_label.time_end)
+        # Clear labels in the deleted window, then re-apply any surviving
+        # overlapping labels so deleting one label does not erase another.
         await session.execute(
             update(CsiSample)
             .where(
-                CsiSample.time >= overlap_start,
-                CsiSample.time < overlap_end,
+                CsiSample.time >= window_start,
+                CsiSample.time < window_end,
             )
-            .values(label=overlapping_label.room)
+            .values(label=None)
         )
 
-    # Sync training_samples: clear the deleted window, then re-add whatever
-    # survived (from overlapping labels re-applied to csi_samples above).
-    await session.commit()
+        await session.delete(label)
+        await session.flush()
+
+        overlapping_result = await session.execute(
+            select(Label)
+            .where(
+                Label.time_start < window_end,
+                Label.time_end > window_start,
+            )
+            .order_by(Label.time_start.asc(), Label.created_at.asc(), Label.id.asc())
+        )
+
+        for overlapping_label in overlapping_result.scalars():
+            overlap_start = max(window_start, overlapping_label.time_start)
+            overlap_end = min(window_end, overlapping_label.time_end)
+            await session.execute(
+                update(CsiSample)
+                .where(
+                    CsiSample.time >= overlap_start,
+                    CsiSample.time < overlap_end,
+                )
+                .values(label=overlapping_label.room)
+            )
+
+        await session.commit()
+    except DBAPIError as exc:
+        await session.rollback()
+        log.warning(
+            "label.delete_skipped",
+            reason="db_error",
+            error=str(exc.orig),
+            start=window_start.isoformat(),
+            end=window_end.isoformat(),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Label cleanup could not acquire the CSI table in time; retry shortly.",
+        ) from None
+
+    # training_samples mirrors csi_samples. It is resynced after the commit
+    # as a best-effort step so a timeout here never fails a delete that has
+    # already succeeded (#64).
     await _resync_training_samples_best_effort(session, window_start, window_end)

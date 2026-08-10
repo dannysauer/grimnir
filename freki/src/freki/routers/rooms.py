@@ -22,6 +22,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..backfill import set_backfill_timeouts
 from ..db import SessionDep
 from ..training_samples_access import is_training_samples_permission_error
 
@@ -139,16 +140,42 @@ async def update_room(room_name: str, body: RoomUpdate, session: SessionDep):
         raise HTTPException(status_code=409, detail=f"Room '{body.name}' already exists") from None
 
     # labels.room is updated automatically by the FK ON UPDATE CASCADE.
-    # csi_samples.label and training_samples.label have no FK, so update
-    # them explicitly — training_samples is what Nornir trains from, so a
-    # rename that skips it silently orphans that room's training data.
+    # csi_samples.label and training_samples.label have no FK, so they are
+    # rewritten explicitly in the same transaction — training_samples is what
+    # Nornir trains from, so a rename that skips it silently orphans that
+    # room's training data.
+    #
+    # The rewrite is kept inline (not a background task): committing the
+    # rename first and rewriting the labels afterwards by the old name would
+    # race a fast A->B / B->C rename or a recreated room and silently split
+    # the tables between two names. Doing it in one transaction makes the
+    # rename atomic. The rewrite can span the room's whole history and block
+    # on a compressed chunk (#49), so it runs under bounded timeouts: a write
+    # that can't finish rolls back the whole rename with a retryable 503
+    # rather than hanging the request.
     if new_name != old_name:
-        await session.execute(
-            update(CsiSample).where(CsiSample.label == old_name).values(label=new_name)
-        )
-        await _rename_training_samples_label(session, old_name, new_name)
-
-    await session.commit()
+        try:
+            await set_backfill_timeouts(session)
+            await session.execute(
+                update(CsiSample).where(CsiSample.label == old_name).values(label=new_name)
+            )
+            await _rename_training_samples_label(session, old_name, new_name)
+            await session.commit()
+        except DBAPIError as exc:
+            await session.rollback()
+            log.warning(
+                "room.rename_skipped",
+                reason="db_error",
+                error=str(exc.orig),
+                old_name=old_name,
+                new_name=new_name,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Room rename could not acquire the CSI table in time; retry shortly.",
+            ) from None
+    else:
+        await session.commit()
 
     # Re-query by new name (PK may have changed if name changed).
     result = await session.execute(select(Room).where(Room.name == new_name))
