@@ -119,7 +119,11 @@ async def _handle_row(
 ) -> bool:
     """Returns True if this row produced a new prediction vote."""
     csi_rows_consumed.inc()
-    rid = row["receiver_id"]
+    rid = row.get("receiver_id")
+    if rid is None:
+        prediction_errors.labels(stage="row").inc()
+        log.warning("predict.malformed_row", keys=sorted(row.keys()))
+        return False
     rs = state.setdefault(rid, _ReceiverState())
     rs.buf.append(row)
 
@@ -159,9 +163,16 @@ async def stream_loop(
     last_published: dict[str, Any] | None = None
     active_model_id: int | None = None
 
+    # The client carries a finite default timeout for normal requests; the SSE
+    # stream must be able to stay open silently between rows, so read is None
+    # here while connect/write stay bounded.
+    sse_timeout = httpx.Timeout(10.0, read=None)
+
     while not stop.is_set():
         try:
-            async with aconnect_sse(client, "GET", "/api/csi-stream") as source:
+            async with aconnect_sse(
+                client, "GET", "/api/csi-stream", timeout=sse_timeout
+            ) as source:
                 log.info("stream.connected")
                 async for event in source.aiter_sse():
                     if stop.is_set():
@@ -195,6 +206,17 @@ async def stream_loop(
             log.warning("stream.connection_lost", error=str(exc))
         except asyncio.CancelledError:
             raise
+        except Exception as exc:
+            # Any other error (a malformed frame that slips past _handle_row,
+            # a publish edge case) must not kill the only inference task and
+            # leave /health reporting ok while nothing is predicted.
+            log.warning("stream.unexpected_error", error=str(exc), exc_info=True)
+
+        # Buffers from before a disconnect would otherwise complete a window
+        # spanning the gap after reconnect, mixing pre- and post-outage rows.
+        state.clear()
+        last_published = None
+        active_model_id = None
 
         try:
             await asyncio.wait_for(stop.wait(), timeout=reconnect_backoff_s)

@@ -12,7 +12,7 @@ predictions_served = Counter(
 prediction_errors = Counter(
     "volva_prediction_errors_total",
     "Failures during feature extraction, inference, or publish",
-    ["stage"],  # "extract" | "predict" | "publish"
+    ["stage"],  # "row" | "extract" | "predict" | "publish"
 )
 
 inference_duration_seconds = Histogram(
