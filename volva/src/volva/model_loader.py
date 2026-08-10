@@ -83,6 +83,12 @@ async def refresh_loop(
             log.warning("model.refresh_fetch_failed", error=str(exc))
         except ModelLoadError as exc:
             log.warning("model.refresh_load_failed", error=str(exc))
+        except Exception as exc:
+            # joblib.load raises arbitrary errors on a corrupt blob or a
+            # sklearn-version mismatch between the nornir and volva images.
+            # Log and retry next tick rather than letting the loop die and
+            # freeze the active model forever.
+            log.warning("model.refresh_unexpected_error", error=str(exc), exc_info=True)
         else:
             if latest is None:
                 if holder.current is not None:
