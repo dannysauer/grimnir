@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from conftest import FakeExecuteResult, FakeSession
@@ -8,6 +9,16 @@ from fastapi import BackgroundTasks, HTTPException
 from freki.routers import labels
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError, ProgrammingError
+
+
+def _label(label_id: int, start: datetime, end: datetime, room: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=label_id,
+        time_start=start,
+        time_end=end,
+        room=room,
+        created_at=start,
+    )
 
 
 @pytest.mark.asyncio
@@ -113,5 +124,85 @@ async def test_csi_backfill_is_bounded_best_effort() -> None:
     )
 
     assert backfilled is False
+    assert session.commits == 0
+    assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_label_commits_cleanup_then_resyncs() -> None:
+    start = datetime(2026, 4, 19, 19, 0, tzinfo=UTC)
+    end = datetime(2026, 4, 19, 20, 0, tzinfo=UTC)
+    label = _label(7, start, end, "kitchen")
+    session = FakeSession(
+        execute_results=[
+            FakeExecuteResult(scalar_value=label),  # label lookup
+            FakeExecuteResult(),  # SET LOCAL lock_timeout
+            FakeExecuteResult(),  # SET LOCAL statement_timeout
+            FakeExecuteResult(),  # clear window UPDATE
+            FakeExecuteResult(scalars_values=[]),  # overlap query
+            # resync (post-commit): SET LOCAL x2, DELETE, then insert helper
+            # re-sets timeouts (x2) and runs INSERT
+            FakeExecuteResult(),
+            FakeExecuteResult(),
+            FakeExecuteResult(),  # DELETE FROM training_samples
+            FakeExecuteResult(),
+            FakeExecuteResult(),
+            FakeExecuteResult(),  # INSERT INTO training_samples
+        ]
+    )
+
+    await labels.delete_label(7, session)
+
+    assert session.deleted == [label]
+    assert session.commits == 2  # cleanup transaction + resync transaction
+
+
+@pytest.mark.asyncio
+async def test_delete_label_returns_503_on_lock_timeout() -> None:
+    start = datetime(2026, 4, 19, 19, 0, tzinfo=UTC)
+    end = datetime(2026, 4, 19, 20, 0, tzinfo=UTC)
+    session = FakeSession(
+        execute_results=[
+            FakeExecuteResult(scalar_value=_label(7, start, end, "kitchen")),
+            FakeExecuteResult(),  # SET LOCAL lock_timeout
+            FakeExecuteResult(),  # SET LOCAL statement_timeout
+            ProgrammingError(
+                "UPDATE csi_samples ...",
+                {},
+                Exception("canceling statement due to lock timeout"),
+            ),
+        ]
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        await labels.delete_label(7, session)
+
+    assert excinfo.value.status_code == 503
+    assert session.commits == 0
+    assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_label_resync_never_raises_after_commit() -> None:
+    # A timeout in the post-commit training_samples resync must not surface
+    # as a 500 for a delete that already succeeded (#64).
+    session = FakeSession(
+        execute_results=[
+            FakeExecuteResult(),  # SET LOCAL lock_timeout
+            FakeExecuteResult(),  # SET LOCAL statement_timeout
+            ProgrammingError(
+                "DELETE FROM training_samples ...",
+                {},
+                Exception("canceling statement due to lock timeout"),
+            ),
+        ]
+    )
+
+    await labels._resync_training_samples_best_effort(
+        session,
+        datetime(2026, 4, 19, 19, 0, tzinfo=UTC),
+        datetime(2026, 4, 19, 20, 0, tzinfo=UTC),
+    )
+
     assert session.commits == 0
     assert session.rollbacks == 1
