@@ -212,11 +212,15 @@ async def stream_loop(
             # leave /health reporting ok while nothing is predicted.
             log.warning("stream.unexpected_error", error=str(exc), exc_info=True)
 
-        # Buffers from before a disconnect would otherwise complete a window
-        # spanning the gap after reconnect, mixing pre- and post-outage rows.
-        state.clear()
-        last_published = None
-        active_model_id = None
+        # Drop each receiver's buffered rows so a window can't span the
+        # outage, but keep the completed vote histories: clearing them would
+        # publish a false vacancy for every room only another receiver was
+        # voting for, until that receiver refills a window (or forever if it
+        # stays offline). Age-based vote expiry is tracked in #87. active_model
+        # and last_published are left intact; if the model changed during the
+        # outage the model-swap guard above resets state on the next row.
+        for rs in state.values():
+            rs.buf.clear()
 
         try:
             await asyncio.wait_for(stop.wait(), timeout=reconnect_backoff_s)
