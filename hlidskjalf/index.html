@@ -982,6 +982,11 @@
 const API = window.location.origin;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
+// escHtml protects HTML text and attribute contexts only. Never interpolate
+// data into inline event handlers (onclick="fn('${...}')") — the HTML parser
+// decodes entities in attributes before the JS engine sees them, so &#39;
+// becomes ' again and breaks out of the string. Render data-* attributes and
+// attach handlers with addEventListener instead.
 function escHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -1432,13 +1437,15 @@ function renderLiveRoomButtons() {
       <div class="quick-btns">
         ${rooms.map(r => `
           <button class="quick-btn${liveRoom === r.name ? ' selected-green' : ''}"
-                  onclick="selectLiveRoom('${escHtml(r.name)}', this)">
+                  data-room="${escHtml(r.name)}">
             ${escHtml(displayRoomName(r.name))}
           </button>
         `).join('')}
       </div>
     </div>
   `).join('');
+  container.querySelectorAll('button[data-room]').forEach(btn =>
+    btn.addEventListener('click', () => selectLiveRoom(btn.dataset.room, btn)));
 }
 
 function renderTimestampRoomPicker() {
@@ -1446,11 +1453,12 @@ function renderTimestampRoomPicker() {
   const btns = document.getElementById('ts-room-btns');
   if (btns) {
     btns.innerHTML = knownRooms.map(r => `
-      <button class="quick-btn" data-room="${escHtml(r.name)}"
-              onclick="quickRoomTs(this,'${escHtml(r.name)}')">
+      <button class="quick-btn" data-room="${escHtml(r.name)}">
         ${escHtml(displayRoomName(r.name))}
       </button>
     `).join('');
+    btns.querySelectorAll('button[data-room]').forEach(btn =>
+      btn.addEventListener('click', () => quickRoomTs(btn, btn.dataset.room)));
   }
   // Select with optgroups per floor
   const sel = document.getElementById('ts-room-select');
@@ -1711,7 +1719,7 @@ function renderRoomManager() {
                     style="flex:1;font-family:var(--mono);font-size:13px;padding:4px 6px;
                            background:var(--surface2);border:1px solid var(--accent);
                            border-radius:4px;color:var(--text);min-width:0">
-             <button onclick="saveRoomName('${escHtml(r.name)}')"
+             <button data-room="${escHtml(r.name)}" data-act="save"
                      style="background:var(--accent);color:var(--bg);border:none;border-radius:4px;
                             padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
                save
@@ -1722,7 +1730,7 @@ function renderRoomManager() {
                ✕
              </button>`
           : `<span class="room-name-display" title="click to rename"
-                   onclick="editRoomName('${escHtml(r.name)}')">
+                   data-room="${escHtml(r.name)}" data-act="edit">
                ${escHtml(r.name)}
              </span>`;
         return `
@@ -1730,16 +1738,26 @@ function renderRoomManager() {
             ${nameCell}
             <span class="room-floor-label">fl.</span>
             <input type="number" value="${r.floor}" min="0" max="99"
-                   onchange="updateRoomFloor('${escHtml(r.name)}',this.value)"
+                   data-room="${escHtml(r.name)}" data-act="floor"
                    style="width:48px;padding:4px 6px;font-family:var(--mono);font-size:13px;
                           text-align:center;background:var(--surface2);border:1px solid var(--border);
                           border-radius:4px;color:var(--text)">
-            ${isEditing ? '' : `<button class="room-del-btn" onclick="deleteRoom('${escHtml(r.name)}')">✕</button>`}
+            ${isEditing ? '' : `<button class="room-del-btn" data-room="${escHtml(r.name)}" data-act="delete">✕</button>`}
           </div>
         `;
       }).join('')}
     </div>
   `).join('');
+
+  list.querySelectorAll('[data-act]').forEach(el => {
+    const room = el.dataset.room;
+    switch (el.dataset.act) {
+      case 'save':   el.addEventListener('click',  () => saveRoomName(room)); break;
+      case 'edit':   el.addEventListener('click',  () => editRoomName(room)); break;
+      case 'delete': el.addEventListener('click',  () => deleteRoom(room)); break;
+      case 'floor':  el.addEventListener('change', () => updateRoomFloor(room, el.value)); break;
+    }
+  });
 
   if (_editingRoom) {
     setTimeout(() => {
@@ -1866,8 +1884,10 @@ function renderJobRoomPicker() {
   }
   container.innerHTML = knownRooms.map(r => {
     const sel = selectedJobRooms.has(r.name) ? ' selected-green' : '';
-    return `<button class="quick-btn${sel}" onclick="toggleJobRoom('${escHtml(r.name)}', this)">${escHtml(displayRoomName(r.name))}</button>`;
+    return `<button class="quick-btn${sel}" data-room="${escHtml(r.name)}">${escHtml(displayRoomName(r.name))}</button>`;
   }).join('');
+  container.querySelectorAll('button[data-room]').forEach(btn =>
+    btn.addEventListener('click', () => toggleJobRoom(btn.dataset.room, btn)));
 }
 
 function toggleJobRoom(name, _el) {
