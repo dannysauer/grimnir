@@ -152,10 +152,10 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e mimir[features] -e geri[test] -e freki[test]
+          python -m pip install -e mimir[features] -e geri[test] -e freki[test] -e nornir[test] -e volva[test]
 
       - name: Run pytest
-        run: pytest geri/tests freki/tests
+        run: pytest geri/tests freki/tests nornir/tests volva/tests
 
   # ── Build and push container images ───────────────────────────────────────
   images:
