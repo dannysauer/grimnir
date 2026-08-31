@@ -24,7 +24,7 @@ repos:
   # ── Python: ruff (lint + format) ─────────────────────────────────────────────
   # ruff replaces flake8, isort, and black in a single fast tool.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.18
+    rev: v0.16.5
     hooks:
       - id: ruff          # linting + auto-fix
         args: [--fix]
@@ -32,7 +32,7 @@ repos:
 
   # ── Shell scripts ────────────────────────────────────────────────────────────
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
         args: [--severity=warning]
