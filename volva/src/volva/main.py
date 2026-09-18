@@ -41,6 +41,7 @@ import httpx
 import structlog
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from .metrics import active_model_age_seconds, active_model_id
@@ -106,17 +107,43 @@ async def lifespan(app: FastAPI):
     app.state.model_holder = holder
     stop_event = asyncio.Event()
     app.state.stop_event = stop_event
+    app.state.degraded = False
 
-    # Long timeout for the SSE client; short for everything else.
-    app.state.http = httpx.AsyncClient(base_url=FREKI_URL, timeout=None)
+    # Finite timeouts for the request/response calls (active-model poll, model
+    # download, prediction publish) so a hung connection can't wedge a loop.
+    # The SSE consumer needs an unbounded read, so predict.stream_loop passes
+    # its own read=None timeout on the /api/csi-stream request.
+    app.state.http = httpx.AsyncClient(base_url=FREKI_URL, timeout=httpx.Timeout(10.0))
+
+    def _mark_degraded(task: asyncio.Task) -> None:
+        # A lifespan task should only finish when stop_event is set. If one
+        # exits early — returning or raising past its own guards — inference
+        # or model refresh has silently stopped, so /health must stop saying ok.
+        if stop_event.is_set():
+            return
+        app.state.degraded = True
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            exc = None
+        log.error("volva.task_exited_early", task=task.get_name(), error=str(exc) if exc else None)
 
     tasks = [
-        asyncio.create_task(refresh_loop(app.state.http, holder, MODEL_REFRESH_S, stop_event)),
         asyncio.create_task(
-            stream_loop(app.state.http, holder, stop_event, window_size=WINDOW_SIZE)
+            refresh_loop(app.state.http, holder, MODEL_REFRESH_S, stop_event),
+            name="refresh_loop",
         ),
-        asyncio.create_task(_update_model_gauges(holder, stop_event)),
+        asyncio.create_task(
+            stream_loop(app.state.http, holder, stop_event, window_size=WINDOW_SIZE),
+            name="stream_loop",
+        ),
+        asyncio.create_task(
+            _update_model_gauges(holder, stop_event),
+            name="update_model_gauges",
+        ),
     ]
+    for t in tasks:
+        t.add_done_callback(_mark_degraded)
     app.state.tasks = tasks
     log.info("volva.ready")
 
@@ -141,15 +168,41 @@ Instrumentator(
 ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
-@app.get("/health")
-async def health() -> dict[str, object]:
+_HEALTH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status": {"type": "string", "enum": ["ok", "degraded"]},
+        "model_id": {"type": ["integer", "null"]},
+        "model_age_seconds": {"type": "number"},
+    },
+}
+
+
+@app.get(
+    "/health",
+    responses={
+        200: {
+            "description": "Service healthy; background loops running.",
+            "content": {"application/json": {"schema": _HEALTH_SCHEMA}},
+        },
+        503: {
+            "description": "A background loop (model refresh or inference) has stopped.",
+            "content": {"application/json": {"schema": _HEALTH_SCHEMA}},
+        },
+    },
+)
+async def health() -> JSONResponse:
     holder: ModelHolder = app.state.model_holder
     model = holder.current
-    return {
-        "status": "ok",
+    degraded = getattr(app.state, "degraded", False)
+    body = {
+        "status": "degraded" if degraded else "ok",
         "model_id": model.id if model else None,
         "model_age_seconds": holder.age_seconds(),
     }
+    # 503 when a background loop has died so orchestrators and probes see the
+    # failure instead of a process that is up but no longer predicting.
+    return JSONResponse(body, status_code=503 if degraded else 200)
 
 
 def run() -> None:

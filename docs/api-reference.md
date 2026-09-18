@@ -137,7 +137,7 @@ Grimnir prediction product API.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Returns service status, active model id, and model age. |
+| GET | `/health` | Returns service status, active model id, and model age. Responds `200` with `status: ok` normally, or `503` with `status: degraded` if a background loop (model refresh or inference) has stopped. |
 | GET | `/metrics` | Prometheus metrics for active model state and HTTP instrumentation. |
 
 ## Runtime Configuration
