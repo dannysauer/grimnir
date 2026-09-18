@@ -18,6 +18,7 @@ Völva translates a predicted room into ``{room: {human_count: 1}}``.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import time
 from collections.abc import AsyncIterator
@@ -194,12 +195,16 @@ async def run_job(
         classes=sorted(set(y.tolist())),
     )
 
-    clf, metrics = _fit_model(x, y, hyperparams)
+    # fit and serialize are CPU-bound and synchronous; run them off the event
+    # loop so the daemon's job/daemon heartbeats keep flowing. A fit that
+    # blocked the loop past ORPHAN_TIMEOUT_S would let Freki's reaper mark the
+    # job orphaned and requeue it mid-train (#60).
+    clf, metrics = await asyncio.to_thread(_fit_model, x, y, hyperparams)
     metrics["n_rows_fetched"] = row_count
     metrics["window_size"] = window_size
     metrics["feature_version"] = FEATURE_VERSION
 
-    model_bytes = _serialize(clf)
+    model_bytes = await asyncio.to_thread(_serialize, clf)
     log.info(
         "train.finished",
         job_id=job["id"],
