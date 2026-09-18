@@ -66,6 +66,14 @@ class FakeExecuteResult:
         return FakeMappingSequence(self._mappings_values)
 
 
+class _FakeNestedTransaction:
+    async def __aenter__(self) -> _FakeNestedTransaction:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        return None
+
+
 class FakeSession:
     def __init__(
         self,
@@ -85,6 +93,7 @@ class FakeSession:
         self.rollbacks = 0
         self.refreshes = 0
         self.flushes = 0
+        self.nested_begins = 0
 
     async def execute(self, statement: object, *args: object, **kwargs: object) -> object:
         self.execute_calls.append((statement, args, kwargs))
@@ -120,6 +129,10 @@ class FakeSession:
         self.flushes += 1
         if self.flush_exception is not None:
             raise self.flush_exception
+
+    def begin_nested(self) -> _FakeNestedTransaction:
+        self.nested_begins += 1
+        return _FakeNestedTransaction()
 
 
 class _FakeSessionContext:

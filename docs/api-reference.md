@@ -54,7 +54,7 @@ SSE endpoints use `text/event-stream`, disable proxy buffering with
 |--------|------|---------------|-------------|
 | GET | `/api/rooms` | None | Lists rooms ordered by floor and name. |
 | POST | `/api/rooms` | JSON `{"name": string, "floor": integer}` | Creates a room. Returns `409` when the room already exists. |
-| PATCH | `/api/rooms/{room_name}` | JSON with optional `name` and `floor` | Updates room metadata. Name changes cascade to labels and update `csi_samples.label`. |
+| PATCH | `/api/rooms/{room_name}` | JSON with optional `name` and `floor` | Updates room metadata. A name change cascades to labels and rewrites the stored label on `csi_samples` and `training_samples`, so historical and training data follow the room. |
 | DELETE | `/api/rooms/{room_name}` | None | Deletes a room. Returns `409` when labels still reference it. |
 | GET | `/api/labels` | `minutes` optional, default 120 | Lists labels whose end time is within the requested window. |
 | POST | `/api/labels` | JSON `time_start`, `time_end`, `room`, `occupants`, optional `notes` | Creates a label and schedules best-effort backfill into CSI samples and training samples. |

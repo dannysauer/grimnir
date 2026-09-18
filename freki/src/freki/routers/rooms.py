@@ -5,7 +5,8 @@ GET    /api/rooms             list all rooms ordered by floor, name
 POST   /api/rooms             create a room
 PATCH  /api/rooms/{name}      update name and/or floor
                               (name change cascades to labels via FK; also
-                               updates csi_samples.label which has no FK)
+                               rewrites csi_samples.label and
+                               training_samples.label, which have no FK)
 DELETE /api/rooms/{name}      delete a room (409 if labels reference it)
 """
 
@@ -13,15 +14,19 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import structlog
 from csi_models import CsiSample, Room
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, text, update
+from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import SessionDep
+from ..training_samples_access import is_training_samples_permission_error
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -60,6 +65,34 @@ class RoomUpdate(BaseModel):
             if not v:
                 raise ValueError("name must not be empty")
         return v
+
+
+async def _rename_training_samples_label(
+    session: AsyncSession, old_name: str, new_name: str
+) -> None:
+    """Propagate a room rename to the denormalized training_samples.label.
+
+    Runs inside the caller's transaction under a savepoint, so a real
+    failure aborts the whole rename instead of leaving the tables split
+    between two names. Installs where training_samples is owned by a
+    different role (#34/#37) skip the sync with a warning so the rename
+    itself still succeeds.
+    """
+    try:
+        async with session.begin_nested():
+            await session.execute(
+                text("UPDATE training_samples SET label = :new_name WHERE label = :old_name"),
+                {"new_name": new_name, "old_name": old_name},
+            )
+    except DBAPIError as exc:
+        if not is_training_samples_permission_error(exc):
+            raise
+        log.warning(
+            "training_samples.rename_skipped",
+            reason="permission_denied",
+            old_name=old_name,
+            new_name=new_name,
+        )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -106,11 +139,14 @@ async def update_room(room_name: str, body: RoomUpdate, session: SessionDep):
         raise HTTPException(status_code=409, detail=f"Room '{body.name}' already exists") from None
 
     # labels.room is updated automatically by the FK ON UPDATE CASCADE.
-    # csi_samples.label has no FK, so update it explicitly.
+    # csi_samples.label and training_samples.label have no FK, so update
+    # them explicitly — training_samples is what Nornir trains from, so a
+    # rename that skips it silently orphans that room's training data.
     if new_name != old_name:
         await session.execute(
             update(CsiSample).where(CsiSample.label == old_name).values(label=new_name)
         )
+        await _rename_training_samples_label(session, old_name, new_name)
 
     await session.commit()
 
