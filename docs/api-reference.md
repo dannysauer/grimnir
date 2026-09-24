@@ -57,7 +57,7 @@ SSE endpoints use `text/event-stream`, disable proxy buffering with
 | PATCH | `/api/rooms/{room_name}` | JSON with optional `name` and `floor` | Updates room metadata. A name change atomically cascades to labels and rewrites the stored label on `csi_samples` and `training_samples`, so historical and training data follow the room. The label rewrite runs under bounded lock and statement timeouts; if it can't finish, the rename rolls back and returns `503` so it can be retried. |
 | DELETE | `/api/rooms/{room_name}` | None | Deletes a room. Returns `409` when labels still reference it. |
 | GET | `/api/labels` | `minutes` optional, default 120 | Lists labels whose end time is within the requested window. |
-| POST | `/api/labels` | JSON `time_start`, `time_end`, `room`, `occupants`, optional `notes` | Creates a label and schedules best-effort backfill into CSI samples and training samples. |
+| POST | `/api/labels` | JSON `time_start`, `time_end`, `room`, `occupants`, optional `pet_count` (default 0), optional `notes` | Creates a label and schedules best-effort backfill into CSI samples and training samples. `occupants` is the human count; `pet_count` tracks pets separately (see #14). |
 | DELETE | `/api/labels/{label_id}` | None | Deletes a label and clears its backfill window, reapplying overlapping labels, in one bounded transaction. Returns `503` if the CSI cleanup can't finish in time so it can be retried. |
 
 Label creation requires `time_end` to be after `time_start`; unknown rooms

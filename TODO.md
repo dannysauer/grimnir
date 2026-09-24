@@ -114,7 +114,8 @@ as GitHub issues where noted.
       both new services. Human-count label is `labels.occupants` (see #14).
       _(#9 / #16 / #17 / #18 / #19 / #20 / #21)_
 
-- [ ] **Pets vs humans in `occupants`** — v1 ML label is the raw `occupants`
-      column, which currently includes pets. Split once tag inputs identify
-      humans only.
+- [ ] **Pets vs humans in `occupants`** — `labels.pet_count` now tracks pets
+      separately (schema, API, and Hlidskjalf label forms), but the ML
+      pipeline still trains/predicts on `occupants` only and doesn't consume
+      `pet_count` yet.
       _(#14)_

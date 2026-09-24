@@ -33,6 +33,7 @@ class LabelCreate(BaseModel):
     time_end: datetime
     room: str
     occupants: int = 1
+    pet_count: int = 0
     notes: str | None = None
 
     @field_validator("room")
@@ -56,6 +57,7 @@ class LabelOut(BaseModel):
     time_end: datetime
     room: str
     occupants: int
+    pet_count: int
     notes: str | None
     created_at: datetime
 
@@ -203,6 +205,7 @@ async def create_label(body: LabelCreate, background_tasks: BackgroundTasks, ses
         time_end=body.time_end,
         room=body.room,
         occupants=body.occupants,
+        pet_count=body.pet_count,
         notes=body.notes,
     )
     session.add(label)

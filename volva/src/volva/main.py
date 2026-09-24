@@ -18,8 +18,8 @@ Freki's ``GET /api/predictions/current`` directly.
 
 Label carve-out (plan A2): the v1 training target is the ``label`` column
 (room name). A predicted room is reported as ``human_count=1`` with all
-other known rooms at 0. Pets are currently included in ``labels.occupants``
-— see issue #14.
+other known rooms at 0. ``labels.pet_count`` (#14) now records pets
+separately from ``labels.occupants``, but inference does not yet consume it.
 
 Environment variables:
   FREKI_URL         base URL for Freki (default http://freki:8000)

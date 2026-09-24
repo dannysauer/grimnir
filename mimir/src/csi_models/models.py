@@ -99,6 +99,7 @@ class Label(Base):
         nullable=False,
     )
     occupants: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    pet_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

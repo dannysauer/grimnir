@@ -507,7 +507,7 @@ See `TODO.md` for the full checklist with GitHub issue numbers. Key items:
 - [ ] **Supply chain security** (#3) — SBOMs, image signing, VEX, and attestations
 - [ ] **HTTPS / auth** (#5) — no authentication on freki; add nginx + basic auth. Narrow mitigations: `POST /api/models` can be gated with `MODEL_UPLOAD_SHARED_SECRET` (#29), and Nornir's daemon/job ML control writes can be gated with `ML_CONTROL_SHARED_SECRET` (#27).
 - [ ] **Phase calibration** (#7) — raw phase has hardware offsets; preprocess before ML
-- [ ] **Pet vs human labels** (#14) — split occupant tracking before relying on human-only counts
+- [ ] **Pet vs human labels** (#14) — `labels.pet_count` now tracks pets separately from `labels.occupants` (data-collection layer only); ML training/inference still target `occupants` as-is and don't yet consume `pet_count`
 
 ## ML Pipeline
 
@@ -542,8 +542,10 @@ the `[features]` pip extra). `feature_config.version` is incremented whenever
 extractor output changes, which Völva enforces on model load.
 
 **Label carve-out (plan A2):** v1 uses `labels.occupants` as the human-count
-label — `occupants` currently includes pets (#14). A predicted room is reported
-as `human_count=1` with all other known rooms at `0`.
+label. `labels.pet_count` (#14) now records pets separately going forward, but
+training/inference still target `occupants` only — the ML pipeline does not
+yet consume `pet_count`. A predicted room is reported as `human_count=1` with
+all other known rooms at `0`.
 
 The current `RandomForestClassifier` trains on CPU in seconds on typical home
 datasets. Add hardware-specific trainer notes only when the code uses that

@@ -14,6 +14,8 @@ Responsibilities:
 The training target is the ``label`` column (room name). Per the plan's A2
 carve-out, the count-of-occupants field on ``labels`` stays separate for v1;
 Völva translates a predicted room into ``{room: {human_count: 1}}``.
+``labels.pet_count`` (#14) tracks pets separately from ``occupants`` but is
+not yet consumed by training.
 """
 
 from __future__ import annotations

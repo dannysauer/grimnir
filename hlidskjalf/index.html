@@ -762,9 +762,15 @@
           <div class="label-form">
             <div class="section-title">Enter a Room</div>
             <div id="live-room-groups"><div class="empty" style="padding:12px 0">loading rooms…</div></div>
-            <div class="field">
-              <label>OCCUPANTS</label>
-              <input type="number" id="live-occupants" value="1" min="0" max="20">
+            <div class="row-2">
+              <div class="field">
+                <label>OCCUPANTS</label>
+                <input type="number" id="live-occupants" value="1" min="0" max="20">
+              </div>
+              <div class="field">
+                <label>PETS</label>
+                <input type="number" id="live-pet-count" value="0" min="0" max="20">
+              </div>
             </div>
             <div class="field">
               <label>NOTES (optional)</label>
@@ -824,9 +830,15 @@
             </div>
           </div>
 
-          <div class="field">
-            <label>OCCUPANTS</label>
-            <input type="number" id="label-occupants" value="1" min="0" max="20">
+          <div class="row-2">
+            <div class="field">
+              <label>OCCUPANTS</label>
+              <input type="number" id="label-occupants" value="1" min="0" max="20">
+            </div>
+            <div class="field">
+              <label>PETS</label>
+              <input type="number" id="label-pet-count" value="0" min="0" max="20">
+            </div>
           </div>
 
           <div class="field">
@@ -1495,8 +1507,10 @@ function enterRoom() {
   document.getElementById('live-active-room').textContent = displayRoomName(liveRoom);
   document.getElementById('live-since-time').textContent  =
     liveEnterTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const livePets = parseInt(document.getElementById('live-pet-count').value, 10) || 0;
   document.getElementById('live-active-occ').textContent  =
-    `${document.getElementById('live-occupants').value} occ`;
+    `${document.getElementById('live-occupants').value} occ` +
+    (livePets ? ` · ${livePets} pet${livePets === 1 ? '' : 's'}` : '');
 
   if (liveElapsedId) clearInterval(liveElapsedId);
   liveElapsedId = setInterval(updateElapsed, 1000);
@@ -1519,6 +1533,7 @@ async function leaveRoom() {
   const time_start = liveEnterTime.toISOString();
   const time_end   = new Date().toISOString();
   const occupants  = parseInt(document.getElementById('live-occupants').value, 10) || 1;
+  const pet_count  = parseInt(document.getElementById('live-pet-count').value, 10) || 0;
   const notes      = document.getElementById('live-notes-active').value.trim() || null;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -1531,7 +1546,7 @@ async function leaveRoom() {
     const res = await fetch(`${API}/api/labels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ room: liveRoom, time_start, time_end, occupants, notes }),
+      body: JSON.stringify({ room: liveRoom, time_start, time_end, occupants, pet_count, notes }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -1571,10 +1586,12 @@ function resetLiveState() {
   if (active) active.style.display = 'none';
   const notesActive = document.getElementById('live-notes-active');
   const occ         = document.getElementById('live-occupants');
+  const pets        = document.getElementById('live-pet-count');
   const enterBtn    = document.getElementById('live-enter-btn');
   const leaveBtn    = document.getElementById('live-leave-btn');
   if (notesActive) notesActive.value = '';
   if (occ)         occ.value        = '1';
+  if (pets)        pets.value       = '0';
   if (enterBtn)    { enterBtn.disabled = true; enterBtn.textContent = 'Select a room above ↑'; }
   if (leaveBtn)    { leaveBtn.disabled = false; leaveBtn.textContent = 'Leave Room'; }
   renderLiveRoomButtons();
@@ -1611,6 +1628,8 @@ async function submitLabel() {
   const endRaw    = document.getElementById('label-end').value;
   const occupantsRaw = parseInt(document.getElementById('label-occupants').value, 10);
   const occupants = Number.isNaN(occupantsRaw) ? 1 : occupantsRaw;
+  const petCountRaw = parseInt(document.getElementById('label-pet-count').value, 10);
+  const pet_count = Number.isNaN(petCountRaw) ? 0 : petCountRaw;
   const notes     = document.getElementById('label-notes').value.trim() || null;
 
   if (!room)     { toast('Room is required', 'warn'); return; }
@@ -1624,7 +1643,7 @@ async function submitLabel() {
     const res = await fetch(`${API}/api/labels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ room, time_start, time_end, occupants, notes }),
+      body: JSON.stringify({ room, time_start, time_end, occupants, pet_count, notes }),
     });
     if (!res.ok) {
       const body = await res.text();
@@ -1662,7 +1681,7 @@ function renderLabels(labels) {
     return `
       <div class="label-item">
         <div>
-          <div class="label-room">${escHtml(displayRoomName(l.room))} · ${escHtml(l.occupants)} occ</div>
+          <div class="label-room">${escHtml(displayRoomName(l.room))} · ${escHtml(l.occupants)} occ${l.pet_count ? ` · ${escHtml(l.pet_count)} pet${l.pet_count === 1 ? '' : 's'}` : ''}</div>
           <div class="label-time">${escHtml(day)} ${escHtml(s)} – ${escHtml(e)}${l.notes ? ' · ' + escHtml(l.notes) : ''}</div>
         </div>
         <button class="label-del" onclick="deleteLabel(${parseInt(l.id)})" title="Delete">✕</button>

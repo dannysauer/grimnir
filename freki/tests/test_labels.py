@@ -66,12 +66,14 @@ async def test_create_label_commits_label_before_scheduling_backfill() -> None:
         time_end=datetime(2026, 4, 19, 19, 16, 13, 311000, tzinfo=UTC),
         room="kitchen",
         occupants=1,
+        pet_count=2,
     )
 
     label = await labels.create_label(body, background_tasks, session)
 
     assert isinstance(label, labels.LabelOut)
     assert label.room == "kitchen"
+    assert label.pet_count == 2
     assert session.commits == 1
     assert session.refreshes == 1
     assert session.execute_calls == []
