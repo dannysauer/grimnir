@@ -179,9 +179,7 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.JSONRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(
-        getattr(logging, LOG_LEVEL, logging.INFO)
-    ),
+    wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, LOG_LEVEL, logging.INFO)),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
 )
