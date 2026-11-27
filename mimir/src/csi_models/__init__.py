@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .engine import get_engine, get_session_factory, init_engine
+from .engine import create_session_factory, get_engine, get_session_factory, init_engine
 from .migrate import run_migrations
 from .models import (
     Base,
@@ -35,6 +35,7 @@ __all__ = [
     "TrainingDaemon",
     "TrainingJob",
     "TrainingSample",
+    "create_session_factory",
     "get_engine",
     "get_session_factory",
     "init_engine",

@@ -37,8 +37,6 @@ Freki, and they'd block a person with `curl` as much as an agent:
 - A model's metrics are accuracy and macro F1 on a leaky split. There's no
   confusion matrix, no per-class score, and no record of which data it saw.
 - Errors are prose in a `detail` string, and some bad inputs return `500`.
-- Switching the active model fails once a model is already active
-  ([#104](https://github.com/dannysauer/grimnir/issues/104)).
 - Models are pickles, and Völva runs whatever is active. An agent that can
   upload or activate a model can run code in Völva
   ([#103](https://github.com/dannysauer/grimnir/issues/103)).

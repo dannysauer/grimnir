@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from conftest import FakeExecuteResult, FakeSession, FakeSessionFactory
 from fastapi import HTTPException
 from freki.routers import predictions
+from freki_fakes import FakeExecuteResult, FakeSession, FakeSessionFactory
 from sqlalchemy.dialects import postgresql
 
 

@@ -87,7 +87,9 @@ not the individual service directory.
 | Install pinned tools | Repository root | `asdf install` | Python, Node.js, Helm, and pre-commit versions from `.tool-versions` are installed. |
 | Run all configured pre-commit hooks | Repository root | `pre-commit run --all-files` | Ruff, formatting, shell, GitHub Actions, YAML/JSON, and hygiene checks pass. |
 | Run Geri tests | Repository root | `pytest geri/tests` | Parser and aggregator tests pass. |
-| Run Freki tests | Repository root | `pytest freki/tests` | API router and auth tests pass. |
+| Run Freki tests | Repository root | `pytest freki/tests` | API router and auth tests pass; database tests skip. |
+| Start a test database | Any | `docker run -d --name grimnir-tsdb -e POSTGRES_PASSWORD=test -p 55432:5432 timescale/timescaledb:2.32.1-pg17` | TimescaleDB listens on port 55432. |
+| Run the database tests | Repository root | `PGPASSWORD=test GRIMNIR_TEST_DATABASE_URL=postgresql+asyncpg://postgres@127.0.0.1:55432/postgres pytest mimir/tests freki/tests` | Migration, model registry, and job-queue tests run against TimescaleDB instead of skipping. Each test database is created and dropped automatically. |
 | Run Nornir tests | Repository root | `pytest nornir/tests` | Trainer tests pass. |
 | Run Völva tests | Repository root | `pytest volva/tests` | Inference tests pass. |
 | Validate Compose configuration | Repository root | `DATABASE_URL='postgresql+asyncpg://csi_user@db.example.com:5432/csi' docker compose -f bifrost/compose.yaml config` | Compose renders the full four-service stack. |

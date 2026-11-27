@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 from ipaddress import ip_address
 
 import pytest
-from conftest import FakeExecuteResult, FakeSession
 from csi_models import TrainingDaemon
 from freki.routers import training_daemons
+from freki_fakes import FakeExecuteResult, FakeSession
 
 
 def _daemon(*, ip: str) -> TrainingDaemon:

@@ -20,6 +20,11 @@ document records the stable product surface and integration behavior.
 When `FRONTEND_DIR` exists, Freki mounts it at `/` with FastAPI `StaticFiles` and
 HTML index fallback enabled.
 
+Freki sends no CORS headers, so a browser page served from another origin
+can't read its responses. The dashboard is served by Freki itself and isn't
+affected. Server-side clients such as Völva, Nornir, and Home Assistant don't
+use CORS.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/` | None | Hlidskjalf dashboard shell from `hlidskjalf/index.html`. |
@@ -100,7 +105,7 @@ the same environment variable is configured for the daemon.
 | GET | `/api/models/active` | None | Returns active model metadata or `404` when no model is active. |
 | GET | `/api/models/{model_id}/data` | None | Downloads the raw serialized model bytes as `application/octet-stream`. |
 | POST | `/api/models` | `multipart/form-data`: `name`, `metrics` JSON string, `feature_config` JSON string, optional `training_job_id`, `model_data` file | Uploads a trained model. Validates JSON and feature config. |
-| POST | `/api/models/{model_id}/activate` | None | Atomically marks one model active and clears the previous active model. |
+| POST | `/api/models/{model_id}/activate` | None | Atomically marks one model active and clears the previous active model. Returns `503` if another activation holds the lock for more than a few seconds. |
 
 ## Predictions
 
