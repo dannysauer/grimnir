@@ -62,7 +62,7 @@ Install the repo-pinned tools if you use `asdf`:
 asdf install
 ```
 
-The pinned toolchain includes Python 3.12.7, Node.js 24.14.1, Helm 3.16.2,
+The pinned toolchain includes Python 3.12.16, Node.js 24.14.1, Helm 3.16.2,
 and pre-commit 4.5.1.
 
 Create a database or point Grimnir at an existing PostgreSQL database with the
