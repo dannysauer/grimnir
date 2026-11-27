@@ -20,3 +20,4 @@ written down, the record says so instead of guessing.
 | 2026-04-19 | [Carry CSI over a versioned binary UDP protocol with ACK liveness](2026-04-19-udp-wire-protocol-with-ack-liveness.md) | Accepted |
 | 2026-04-19 | [Pin GitHub Actions to full release tags](2026-04-19-pin-actions-to-release-tags.md) | Accepted |
 | 2026-11-15 | [Pin GitHub Actions to commit SHAs](2026-11-15-pin-actions-to-commit-shas.md) | Proposed |
+| 2026-11-27 | [Defer authentication for the proof of concept, behind one seam](2026-11-27-defer-authentication.md) | Accepted |

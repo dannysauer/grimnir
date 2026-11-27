@@ -12,3 +12,4 @@ started.
 | --- | --- | --- |
 | 2026-11-15 | [How sensing gets from one-room classification to occupancy, sleep, and respiration](2026-11-15-sensing-roadmap.md) | Draft |
 | 2026-11-15 | [How an AI agent helps train models](2026-11-15-agent-training-interface.md) | Draft |
+| 2026-11-27 | [What the training workbench shows, and how Claude narrates a run](2026-11-27-training-workbench.md) | Draft |

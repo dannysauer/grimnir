@@ -69,7 +69,9 @@ receiver needs no schema change, because Geri registers each new receiver
 name it sees.
 
 Freki has no authentication. Everything it serves is open to any client that
-can reach it, so the system belongs on a trusted network only.
+can reach it, so the system belongs on a trusted network only. That's a
+deliberate choice for the proof of concept, recorded in
+[Defer authentication](../adrs/2026-11-27-defer-authentication.md).
 
 ## Building blocks
 
@@ -124,6 +126,7 @@ them with a new one.
 - [Carry CSI over a versioned binary UDP protocol with ACK liveness](../adrs/2026-04-19-udp-wire-protocol-with-ack-liveness.md)
 - [Pin GitHub Actions to full release tags](../adrs/2026-04-19-pin-actions-to-release-tags.md),
   with a [proposed replacement](../adrs/2026-11-15-pin-actions-to-commit-shas.md)
+- [Defer authentication for the proof of concept, behind one seam](../adrs/2026-11-27-defer-authentication.md)
 
 ## Open questions
 
@@ -135,7 +138,11 @@ them with a new one.
 - **How should an AI agent help train models?** The
   [agent training interface](../design/2026-11-15-agent-training-interface.md)
   design doc compares an MCP server with the alternatives.
-- **How is Freki authenticated?** Nothing is chosen.
+- **What should training look like in the dashboard?** The
+  [training workbench](../design/2026-11-27-training-workbench.md) design doc
+  covers the screen and plain-language progress updates written by Claude.
+- **How is Freki authenticated, once it is?** Deferred for the proof of
+  concept ([record](../adrs/2026-11-27-defer-authentication.md));
   [#5](https://github.com/dannysauer/grimnir/issues/5) lists the candidates.
 - **How are release artifacts signed and attested?** Tracked in
   [#3](https://github.com/dannysauer/grimnir/issues/3).

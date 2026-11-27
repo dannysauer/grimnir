@@ -170,11 +170,14 @@ Fill the gaps in Freki first, then put a separate MCP server in front of it.
 Use snapshots and a coding agent for feature research, with the results
 coming back as reviewed code, not as uploaded models.
 
-I'm confident about the first step, because every option depends on it. I'm
-less sure the MCP server should come before general authentication. Without
-[#5](https://github.com/dannysauer/grimnir/issues/5), the server's scoping
-protects nothing: an agent that can reach the MCP server's network can
-usually reach Freki too.
+I'm confident about the first step, because every option depends on it.
+
+Authentication is deferred for the proof of concept
+([record](../adrs/2026-11-27-defer-authentication.md)), so on the home network
+the MCP server's scoping is a guard against mistakes, not a security
+boundary: an agent that can reach the MCP server can usually reach Freki too.
+That's acceptable for a proof of concept, and the scopes in that record are
+the ones the MCP server's credential will carry once authentication lands.
 
 Two things should be settled before an agent gets a credential. Models
 shouldn't be pickles, or uploads should be signed by the trainer and checked
@@ -187,9 +190,9 @@ by Völva. And activation should need a person.
   decides.
 - **May an agent activate a model?** The draft says no, it proposes and a
   person approves. The owner decides.
-- **How is the MCP server authenticated to the agent, and to Freki?** It
-  depends on the outcome of
-  [#5](https://github.com/dannysauer/grimnir/issues/5).
+- **How is the MCP server authenticated to the agent, and to Freki?**
+  Deferred with the rest of authentication. The MCP server asks for the
+  `ml:train` scope and nothing broader.
 - **What replaces pickled models?** A spike comparing ONNX and skops on the
   current random forest would answer whether either is a drop-in.
 - **How large is a dataset snapshot?** The reviewer's estimate is about 1 GB
@@ -199,4 +202,10 @@ by Völva. And activation should need a person.
 
 ## Outcome
 
-Open. No changes of direction yet.
+Open. Changes of direction so far:
+
+- 2026-11-27: authentication is deferred for the proof of concept, with named
+  scopes for later ([record](../adrs/2026-11-27-defer-authentication.md)). The
+  owner also asked for plain-language progress updates while training runs;
+  the [training workbench](2026-11-27-training-workbench.md) doc covers those,
+  and an agent interface would read the same job events.

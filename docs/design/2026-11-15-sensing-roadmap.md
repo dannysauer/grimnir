@@ -169,6 +169,14 @@ to do: "something moved here" from CSI, "who or what it was" from Bluetooth.
 A millimetre-wave presence sensor beside a bed is a similar shortcut for
 sleep and respiration, at the price of new hardware per bed.
 
+Wearables the household already owns are a cheaper second signal for sleep,
+used as labels rather than as a live input. A Samsung phone or watch and an
+Oura ring each record when their wearer fell asleep and woke up, and the Oura
+data includes sleep stages and an average breathing rate. Imported after the
+fact, that gives sleep sessions and breathing rates to train and score
+against without anyone labeling a night by hand. It says nothing about which
+bed, so the room still comes from CSI or a bedroom label.
+
 ## Comparison
 
 Rows where every option scores the same are left out. The confidence figures
@@ -222,10 +230,22 @@ than moved to Bluetooth.
 - **How many links does the house need?** Unknown. One transmitter and two
   receivers give two links. Every node transmitting in turn would give many
   more from the same boards.
-- **Does the existing training set carry forward?** It depends on whether
-  old labels map cleanly onto the new annotation model. The owner decides
-  whether to migrate or retire it.
+- **Does the existing training set carry forward?** The owner prefers to
+  migrate it and accepts losing data where a clean mapping doesn't exist.
+  #107 carries that out.
+- **How does wearable sleep data get in?** Oura has a cloud API. Samsung
+  Health has no public cloud API that I know of; its data can be exported
+  from the phone, and Android's Health Connect may expose it to an app on the
+  same phone. A spike should confirm what each offers today and how to
+  authorize it. Tracked in the sleep ground-truth issue linked from #102.
 
 ## Outcome
 
-Open. No changes of direction yet.
+Open. Changes of direction so far:
+
+- 2026-11-27: the owner chose to migrate existing labels into the new label
+  model, accepting some loss, and to treat Samsung Health and Oura sleep
+  records as future ground truth for sleep work. Authentication is deferred
+  for the proof of concept
+  ([record](../adrs/2026-11-27-defer-authentication.md)), and that record
+  holds sleep data back until authentication exists.
