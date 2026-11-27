@@ -35,10 +35,8 @@ which time range and rooms to train on. The uploaded model does nothing until
 someone activates it in the dashboard, and then Völva picks it up and starts
 publishing predictions.
 
-Two parts of this flow don't work as drawn. Activating a model while another
-is active fails ([#104](https://github.com/dannysauer/grimnir/issues/104)).
-And a job that was cancelled, or failed by the orphan reaper, keeps training
-and still uploads its model
+One part of this flow doesn't work as drawn: a job that was cancelled, or
+failed by the orphan reaper, keeps training and still uploads its model
 ([#106](https://github.com/dannysauer/grimnir/issues/106)).
 
 ## Labels

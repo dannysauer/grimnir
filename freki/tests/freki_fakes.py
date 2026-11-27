@@ -1,9 +1,18 @@
+"""In-memory stand-ins for SQLAlchemy sessions and results, for unit tests.
+
+These replay canned results and execute no SQL. Tests that need real
+database behavior belong under ``integration/`` instead. The module name is
+prefixed so it can't collide with another suite's helpers in one pytest run.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 
 
 class FakeScalarSequence:
+    """Stands in for the result of ``Result.scalars()``."""
+
     def __init__(self, values: Sequence[object]):
         self._values = list(values)
 
@@ -15,6 +24,8 @@ class FakeScalarSequence:
 
 
 class FakeMappingSequence:
+    """Stands in for the result of ``Result.mappings()``."""
+
     def __init__(self, values: Sequence[object]):
         self._values = list(values)
 
@@ -23,6 +34,8 @@ class FakeMappingSequence:
 
 
 class FakeExecuteResult:
+    """Stands in for a ``Result``, replaying values given at construction."""
+
     def __init__(
         self,
         *,
@@ -78,6 +91,8 @@ class _FakeNestedTransaction:
 
 
 class FakeSession:
+    """Stands in for an ``AsyncSession``: records calls and replays queued results."""
+
     def __init__(
         self,
         *,
@@ -150,6 +165,8 @@ class _FakeSessionContext:
 
 
 class FakeSessionFactory:
+    """Stands in for an ``async_sessionmaker`` that hands out fake sessions."""
+
     def __init__(self, sessions: Sequence[FakeSession]) -> None:
         self._sessions = list(sessions)
 

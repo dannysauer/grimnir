@@ -32,7 +32,6 @@ import structlog
 import uvicorn
 from csi_models import get_engine, init_engine, run_migrations
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -113,12 +112,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CSI Localization API", version="0.1.0", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(stream.router, prefix="/api")
 app.include_router(csi_stream.router, prefix="/api/csi-stream")

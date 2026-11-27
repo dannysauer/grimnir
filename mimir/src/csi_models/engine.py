@@ -25,8 +25,17 @@ def init_engine(database_url: str) -> AsyncEngine:
         future=True,
         pool_pre_ping=True,
     )
-    _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
+    _session_factory = create_session_factory(_engine)
     return _engine
+
+
+def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    """Build the session factory every service uses for ``engine``.
+
+    Objects stay readable after commit (``expire_on_commit=False``); route
+    handlers rely on that to read generated ids without another query.
+    """
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 
 def get_engine() -> AsyncEngine:

@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from conftest import FakeExecuteResult, FakeSession
 from fastapi import HTTPException
 from freki.routers import rooms
+from freki_fakes import FakeExecuteResult, FakeSession
 from sqlalchemy.exc import ProgrammingError
 
 

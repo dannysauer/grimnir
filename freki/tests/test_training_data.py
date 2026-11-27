@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from conftest import FakeExecuteResult, FakeSession
 from csi_models import CsiSample
 from freki.routers import training_data
+from freki_fakes import FakeExecuteResult, FakeSession
 from sqlalchemy.exc import ProgrammingError
 
 

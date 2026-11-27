@@ -15,6 +15,21 @@ jobs:
     name: Pytest
     runs-on: ubuntu-latest
 
+    # Integration tests create throwaway databases on this server. The
+    # password only exists inside the job's service container.
+    services:
+      timescaledb:
+        image: timescale/timescaledb:2.32.1-pg17@sha256:2f5e6969faa5cd7f4b075d65f124e30dc50d456b7b807e5c1acd9d51ba7df51c
+        env:
+          POSTGRES_PASSWORD: grimnir-ci  # pragma: allowlist secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -29,4 +44,7 @@ jobs:
           python -m pip install -e mimir[features] -e geri[test] -e freki[test] -e nornir[test] -e volva[test]
 
       - name: Run pytest
-        run: pytest geri/tests freki/tests nornir/tests volva/tests
+        env:
+          GRIMNIR_TEST_DATABASE_URL: postgresql+asyncpg://postgres@localhost:5432/postgres
+          PGPASSWORD: grimnir-ci  # pragma: allowlist secret
+        run: pytest mimir/tests geri/tests freki/tests nornir/tests volva/tests

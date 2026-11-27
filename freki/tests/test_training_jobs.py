@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from conftest import FakeExecuteResult, FakeSession
 from csi_models import TrainingJob
 from fastapi import HTTPException
 from freki.routers import training_jobs
+from freki_fakes import FakeExecuteResult, FakeSession
 from sqlalchemy.dialects import postgresql
 
 

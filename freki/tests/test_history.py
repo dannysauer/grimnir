@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from conftest import FakeExecuteResult, FakeSession
 from freki.routers import history
+from freki_fakes import FakeExecuteResult, FakeSession
 
 
 @pytest.mark.asyncio
