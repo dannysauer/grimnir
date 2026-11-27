@@ -41,6 +41,7 @@ repos:
   # Scans for high-entropy strings and common credential patterns.
   # config.local.h is gitignored, but this catches accidental inline credentials
   # in committed files (e.g. someone hardcoding a password in config.h).
+  # This hook is the check for requirement GRM-034.
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:

@@ -1,0 +1,15 @@
+# Settings for trellis skills. Skills read this before asking a question.
+style: trellis
+paths:
+  adrs: docs/adrs
+  design: docs/design
+  living: docs/architecture
+  evidence: docs/planning/evidence
+adrs:
+  naming: date
+  owner: Danny Sauer
+requirements:
+  id_pattern: GRM-<NNN>
+  keywords: rfc2119
+precedence: AGENTS.md
+shared_adrs: none

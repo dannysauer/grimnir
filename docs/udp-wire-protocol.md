@@ -19,7 +19,8 @@ backward compatibility with older receiver firmware.
 | ACK cadence | Geri sends lightweight ACKs no more often than `ACK_INTERVAL_S`, default 5 seconds, per sender address. |
 
 Muninn uses ACK flow as a recovery signal. If CSI is still flowing but ACKs stop
-long enough, the receiver watchdog reboots the board.
+for `RECEIVER_WATCHDOG_ACK_TIMEOUT_S`, the receiver watchdog closes and reopens
+its UDP socket.
 
 ## Version 2 Packet Layout
 

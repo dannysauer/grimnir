@@ -71,12 +71,14 @@ def test_parse_packet_round_trips_valid_payload() -> None:
     assert packet.phase == [-0.5, -1.0, -1.5, -2.0, -2.5, -3.0]
 
 
+# Verifies GRM-001: Geri accepts packet versions 1 and 2.
 def test_parse_packet_v1_remains_supported() -> None:
     packet = parse_packet(_build_packet(version=1, receiver_name="grimnir-rx-old"))
 
     assert packet.receiver_name == "grimnir-rx-old"
 
 
+# Verifies GRM-001.
 def test_parse_packet_v2_supports_longer_receiver_names() -> None:
     packet = parse_packet(_build_packet(receiver_name="grimnir-rx-office-west"))
 
@@ -88,6 +90,7 @@ def test_parse_packet_trims_receiver_name_padding() -> None:
     assert packet.receiver_name == "rx_upstairs"
 
 
+# The four rejection tests below verify GRM-002.
 def test_parse_packet_rejects_short_header() -> None:
     with pytest.raises(ParseError, match="Packet too short"):
         parse_packet(b"\x00" * (HEADER_SIZE_V1 - 1))
