@@ -19,6 +19,7 @@ class FakeTransport:
         self.sent.append((data, addr))
 
 
+# Verifies GRM-004: at most one ACK per sender address per ACK_INTERVAL_S.
 @pytest.mark.asyncio
 async def test_protocol_throttles_ack_per_peer(monkeypatch: pytest.MonkeyPatch) -> None:
     queue: asyncio.Queue = asyncio.Queue()

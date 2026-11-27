@@ -427,7 +427,8 @@ static void enable_csi(void)
 
 // ── UDP send task ─────────────────────────────────────────────────────────────
 
-// Wire packet header (44 bytes, little-endian)
+// Wire packet header, version 2 (HEADER_SIZE bytes, little-endian).
+// docs/udp-wire-protocol.md documents the layout.
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint16_t version;

@@ -63,7 +63,7 @@
 
 // Ack-based recovery watchdog. Muninn expects periodic lightweight UDP ACKs
 // from Geri while CSI is actively flowing; if CSI is still being captured but
-// ACKs stop for too long, the receiver reboots itself.
+// ACKs stop for too long, the receiver closes and reopens its UDP socket.
 #ifndef RECEIVER_WATCHDOG_ACK_TIMEOUT_S
 #  define RECEIVER_WATCHDOG_ACK_TIMEOUT_S 60
 #endif

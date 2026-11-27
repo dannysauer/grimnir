@@ -1,10 +1,11 @@
 """
 freki_client.py — thin async HTTP client for Freki's ML endpoints.
 
-Every Nornir interaction with the backend goes through here so that retries,
-timeouts, and error translation live in a single place. The client raises
-``FrekiError`` on non-2xx responses with enough context for the caller to
-decide whether to keep running.
+Every Nornir interaction with the backend goes through here so that timeouts
+and error translation live in a single place. The client raises ``FrekiError``
+on unexpected status codes with enough context for the caller to decide
+whether to keep running. It doesn't retry, and transport errors from httpx
+pass through unwrapped (#109).
 """
 
 from __future__ import annotations

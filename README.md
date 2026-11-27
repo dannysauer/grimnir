@@ -19,17 +19,24 @@ Start here, then follow the component docs for the task you are doing:
 
 | Task | Doc |
 |------|-----|
-| Understand the monorepo layout, component roles, and command matrix | [Monorepo guide](docs/monorepo.md) |
+| Understand what the system is and how the parts fit | [Architecture overview](docs/architecture/overview.md) |
+| See the tables, retention rules, and how labels reach the training set | [Data model](docs/architecture/data-model.md) |
+| Follow a label through training to a live prediction | [ML pipeline](docs/architecture/ml-pipeline.md) |
+| Check the requirements the system has to keep | [Quality attributes](docs/architecture/quality-attributes.md) |
+| Find out why something was built the way it was | [Decision records](docs/adrs/README.md) |
+| See which design choices are still open | [Design docs](docs/design/README.md) |
+| Find the repository layout, tool versions, and command matrix | [Monorepo guide](docs/monorepo.md) |
 | Build, flash, and verify ESP32-S3 firmware | [Firmware build and flash guide](docs/firmware-build-and-flash.md) |
 | Read the Freki REST/SSE API and service health endpoints | [API reference](docs/api-reference.md) |
 | Read the Muninn-to-Geri UDP packet contract | [UDP wire protocol](docs/udp-wire-protocol.md) |
 | Run the stack with Compose, Helm, or Ansible | [Deployment guide](docs/deployment.md) |
 | Install or configure the Helm chart directly | [Helm chart README](bifrost/helm/grimnir/README.md) |
+| Look up a Prometheus metric | [Metrics reference](docs/metrics-reference.md) |
 | Understand the component names | [Naming reference](GRIMNIR.md) |
-| Track known follow-up work | [TODO checklist](TODO.md) |
+| Track known follow-up work | [GitHub issues](https://github.com/dannysauer/grimnir/issues) |
 
-`CLAUDE.md` is agent context for code assistants. It should agree with these
-reader-facing docs, but it is not the only source of documentation.
+`AGENTS.md` holds the working rules for code assistants and points back to
+these docs. `CLAUDE.md` imports it.
 
 ## Components
 
@@ -107,6 +114,7 @@ verification, and operational notes.
 ## Current Status
 
 The data collection, dashboard, labeling, training, and live inference pipeline
-is implemented and usable for a home deployment. The main open work is tracked
-in [TODO.md](TODO.md), including broader Freki authentication, supply-chain
-hardening, and phase calibration for ML quality.
+is implemented and usable for a home deployment on a trusted network. Freki has
+no authentication yet. Open work is tracked in
+[GitHub issues](https://github.com/dannysauer/grimnir/issues), and the larger
+open choices are in the [design docs](docs/design/README.md).

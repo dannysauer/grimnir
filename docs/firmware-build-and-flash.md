@@ -37,7 +37,8 @@ defaults in `firmware/config.h`.
 #define RECEIVER_NAME       "grimnir-rx-office-west"
 
 // Optional Muninn watchdog overrides. Defaults are usually fine.
-// If CSI is still flowing but Geri ACKs stop for too long, the receiver reboots.
+// If CSI is still flowing but Geri ACKs stop for too long, the receiver
+// resets its UDP socket.
 //#define RECEIVER_WATCHDOG_ACK_TIMEOUT_S  60
 //#define RECEIVER_WATCHDOG_CSI_GRACE_S    15
 

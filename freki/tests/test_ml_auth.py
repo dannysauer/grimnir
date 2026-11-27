@@ -12,6 +12,7 @@ def test_model_upload_secret_is_noop_when_unset(monkeypatch: pytest.MonkeyPatch)
     models.require_model_upload_secret(None)
 
 
+# Verifies the header comparison behind GRM-030, not that the route applies it.
 def test_model_upload_secret_rejects_missing_or_wrong_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -34,6 +35,7 @@ def test_ml_control_secret_is_noop_when_unset(monkeypatch: pytest.MonkeyPatch) -
     ml_auth.require_ml_control_secret(None)
 
 
+# Verifies the header comparison behind GRM-031, not that the routes apply it.
 def test_ml_control_secret_rejects_missing_or_wrong_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
